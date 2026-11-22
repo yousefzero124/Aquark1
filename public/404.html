@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك | الصفحة مش موجودة</title>
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap" rel="stylesheet">
+  <!-- الصفحة دي مستقلة (الستايل جواها) عشان تظهر صح من أي رابط غلط -->
+  <style>
+    :root { --bg: #0F0F0F; --surface: #1A1A1A; --yellow: #F5C518; --muted: #A1A1AA; --line: rgba(255,255,255,.09); }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font-family: "Cairo", system-ui, sans-serif;
+      color: #fff;
+      background: radial-gradient(circle at 50% 0%, rgba(245,197,24,.14), transparent 55%), var(--bg);
+      text-align: center;
+    }
+    .box { max-width: 460px; }
+    .logo { display: inline-flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-weight: 800; font-size: 26px; margin-bottom: 28px; }
+    .logo svg { height: 44px; width: auto; }
+    .code { font-size: clamp(72px, 18vw, 120px); font-weight: 800; line-height: 1; color: var(--yellow); letter-spacing: 2px; }
+    h1 { margin: 12px 0 8px; font-size: 24px; }
+    p { margin: 0 0 28px; color: var(--muted); line-height: 1.7; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--yellow); color: #141414; font-weight: 800; text-decoration: none;
+      padding: 13px 30px; border-radius: 999px; transition: background .2s;
+    }
+    .btn:hover { background: #E3B40C; }
+    .en { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; direction: ltr; }
+  </style>
+</head>
+<body>
+  <main class="box">
+    <a class="logo" href="/">
+      <svg viewBox="450 318 372 264" aria-hidden="true">
+        <g fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">
+          <polygon points="512,410 568,378 568,434 512,472"/>
+          <polygon points="582,360 646,325 646,446 604,410 582,425"/>
+          <polygon points="660,342 705,368 705,496 660,458"/>
+          <polygon points="716,422 755,447 755,520 716,506"/>
+        </g>
+        <path d="M458,508 L604,410 L742,528 L712,530 L604,440 L531,490 L531,508 Z" fill="#F5C518" stroke="#0F0F0F" stroke-width="9" stroke-linejoin="round" paint-order="stroke"/>
+        <g fill="#F5C518"><rect x="580" y="477" width="18" height="17" rx="2"/><rect x="606" y="477" width="18" height="17" rx="2"/><rect x="580" y="500" width="18" height="17" rx="2"/><rect x="606" y="500" width="18" height="17" rx="2"/></g>
+        <path d="M457,575 Q590,518 815,558 Q625,538 457,575 Z" fill="#F5C518"/>
+      </svg>
+      عقارك
+    </a>
+    <div class="code">404</div>
+    <h1>الصفحة دي مش موجودة</h1>
+    <p>ممكن يكون الرابط غلط أو الصفحة اتنقلت. ارجع للرئيسية وكمّل تصفح العقارات.</p>
+    <a class="btn" href="/">الرجوع للرئيسية</a>
+    <div class="en">Page not found — <a href="/" style="color:#F5C518">Go to the homepage</a></div>
+  </main>
+</body>
+</html>

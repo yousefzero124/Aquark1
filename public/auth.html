@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك</title>
+  <script>try{var l=localStorage.getItem("aqarak_lang")==="en"?"en":"ar";document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="auth" data-title="page_auth">
+
+  <div id="site-header"></div>
+
+  <main class="auth-page">
+    <!-- الجانب الأصفر -->
+    <aside class="auth-side">
+      <video class="hero-bg" id="authVideo" muted loop playsinline preload="auto" aria-hidden="true"></video>
+      <div class="hero-overlay"></div>
+      <div class="auth-side-content">
+        <span class="badge" data-i18n="hero_badge"></span>
+        <h2 data-i18n="auth_side_title"></h2>
+        <p data-i18n="auth_side_sub"></p>
+        <ul id="authSideList"></ul>
+      </div>
+    </aside>
+
+    <div class="auth-main">
+      <div class="auth-card">
+
+        <!-- ===== Login / Signup ===== -->
+        <section id="viewMain">
+          <div class="auth-tabs" role="tablist">
+            <button type="button" data-tab="login" data-i18n="tab_login"></button>
+            <button type="button" data-tab="signup" data-i18n="tab_signup"></button>
+          </div>
+
+          <!-- Login -->
+          <form id="loginForm" novalidate>
+            <h1 data-i18n="login_title"></h1>
+            <p class="sub" data-i18n="login_sub"></p>
+            <div class="form-error hidden" data-error></div>
+            <div class="form-group">
+              <label for="liEmail" data-i18n="l_email"></label>
+              <input class="input" id="liEmail" type="email" autocomplete="email" data-i18n-ph="ph_email" dir="ltr">
+            </div>
+            <div class="form-group">
+              <label for="liPass" data-i18n="l_password"></label>
+              <div class="pass-wrap">
+                <input class="input" id="liPass" type="password" autocomplete="current-password">
+                <button type="button" class="pass-toggle" data-toggle-pass></button>
+              </div>
+            </div>
+            <div class="form-foot"><button type="button" class="link" data-go="forgot" data-i18n="forgot"></button></div>
+            <button class="btn btn-primary btn-block btn-lg" type="submit" data-i18n="btn_login"></button>
+            <div class="divider" data-i18n="or"></div>
+            <div class="google-host"></div>
+            <p class="switch-line"><span data-i18n="no_account"></span> <button type="button" class="link" data-tab="signup" data-i18n="tab_signup"></button></p>
+          </form>
+
+          <!-- Signup -->
+          <form id="signupForm" class="hidden" novalidate>
+            <!-- مؤشر الخطوات: 1 نوع الحساب → 2 البيانات → 3 التفضيلات -->
+            <ol class="stepper" id="stepper">
+              <li data-step="1"><span>1</span><b data-i18n="step_role"></b></li>
+              <li data-step="2"><span>2</span><b data-i18n="step_info"></b></li>
+              <li data-step="3"><span>3</span><b data-i18n="step_prefs"></b></li>
+            </ol>
+            <div class="form-error hidden" data-error></div>
+
+            <!-- الخطوة 1: نوع الحساب -->
+            <div id="suStep1">
+              <h1 data-i18n="signup_title"></h1>
+              <p class="sub" data-i18n="signup_sub"></p>
+              <div class="role-picker role-picker-4" id="rolePicker"></div>
+              <div class="form-group hidden" id="adminCodeGroup" style="margin-top:14px">
+                <label for="suAdminCode" data-i18n="l_admin_code"></label>
+                <input class="input" id="suAdminCode" type="password" autocomplete="off" dir="ltr">
+                <small class="hint" data-i18n="admin_code_hint"></small>
+              </div>
+              <button class="btn btn-primary btn-block btn-lg" type="button" id="suNext" style="margin-top:18px" data-i18n="next"></button>
+              <div id="suGoogleArea">
+                <div class="divider" data-i18n="or"></div>
+                <div class="google-host"></div>
+              </div>
+            </div>
+
+            <!-- الخطوة 2: البيانات الشخصية -->
+            <div id="suStep2" class="hidden">
+              <h1 id="suStep2Title" data-i18n="step_info"></h1>
+              <p class="sub" id="suStep2Sub" data-i18n="signup_sub"></p>
+              <div class="form-group">
+                <label for="suName" class="required" data-i18n="l_name"></label>
+                <input class="input" id="suName" type="text" autocomplete="name" maxlength="60" data-i18n-ph="ph_name">
+              </div>
+              <div class="form-group">
+                <label for="suEmail" class="required" data-i18n="l_email"></label>
+                <input class="input" id="suEmail" type="email" autocomplete="email" data-i18n-ph="ph_email" dir="ltr">
+              </div>
+              <div class="row-2" id="suPassRow">
+                <div class="form-group">
+                  <label for="suPass" class="required" data-i18n="l_password"></label>
+                  <div class="pass-wrap">
+                    <input class="input" id="suPass" type="password" autocomplete="new-password" data-i18n-ph="ph_password">
+                    <button type="button" class="pass-toggle" data-toggle-pass></button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="suPass2" class="required" data-i18n="l_confirm"></label>
+                  <div class="pass-wrap">
+                    <input class="input" id="suPass2" type="password" autocomplete="new-password">
+                    <button type="button" class="pass-toggle" data-toggle-pass></button>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="suPhone" class="required" data-i18n="l_mobile"></label>
+                <input class="input" id="suPhone" type="tel" autocomplete="tel" maxlength="15" data-i18n-ph="ph_phone" dir="ltr">
+              </div>
+              <div class="row-2">
+                <div class="form-group">
+                  <label for="suAge" class="required" data-i18n="l_age"></label>
+                  <input class="input" id="suAge" type="number" min="18" max="100" inputmode="numeric" dir="ltr">
+                </div>
+                <div class="form-group">
+                  <span class="label required" data-i18n="l_gender"></span>
+                  <div class="gender-picker">
+                    <input type="radio" name="gender" id="gMale" value="male"><label for="gMale" data-i18n="male"></label>
+                    <input type="radio" name="gender" id="gFemale" value="female"><label for="gFemale" data-i18n="female"></label>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="suCity" class="required" data-i18n="l_user_city"></label>
+                <select class="input" id="suCity"></select>
+              </div>
+              <div class="form-group">
+                <label for="suAddress" class="required" data-i18n="l_user_address"></label>
+                <input class="input" id="suAddress" type="text" autocomplete="street-address" maxlength="150" data-i18n-ph="ph_user_address">
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-outline btn-lg" type="button" id="suBack" data-i18n="back"></button>
+                <button class="btn btn-primary btn-lg" type="submit" style="flex:1" data-i18n="btn_signup"></button>
+              </div>
+            </div>
+
+            <p class="switch-line"><span data-i18n="have_account"></span> <button type="button" class="link" data-tab="login" data-i18n="tab_login"></button></p>
+          </form>
+        </section>
+
+        <!-- ===== Forgot password ===== -->
+        <section id="viewForgot" class="hidden">
+          <form id="forgotForm" novalidate>
+            <h1 data-i18n="forgot_title"></h1>
+            <p class="sub" data-i18n="forgot_sub"></p>
+            <div class="form-error hidden" data-error></div>
+            <div class="form-note hidden" id="demoNote"></div>
+
+            <div id="fpStep1">
+              <div class="form-group">
+                <label for="fpEmail" data-i18n="l_email"></label>
+                <input class="input" id="fpEmail" type="email" autocomplete="email" data-i18n-ph="ph_email" dir="ltr">
+              </div>
+              <button class="btn btn-primary btn-block btn-lg" type="submit" data-i18n="send_code"></button>
+            </div>
+
+            <div id="fpStep2" class="hidden">
+              <div class="form-group">
+                <label for="fpCode" data-i18n="l_code"></label>
+                <input class="input" id="fpCode" type="text" inputmode="numeric" maxlength="6" dir="ltr" autocomplete="one-time-code">
+              </div>
+              <div class="form-group">
+                <label for="fpPass" data-i18n="l_new_password"></label>
+                <div class="pass-wrap">
+                  <input class="input" id="fpPass" type="password" autocomplete="new-password" data-i18n-ph="ph_password">
+                  <button type="button" class="pass-toggle" data-toggle-pass></button>
+                </div>
+              </div>
+              <button class="btn btn-primary btn-block btn-lg" type="submit" data-i18n="reset_btn"></button>
+            </div>
+
+            <p class="switch-line"><button type="button" class="link" data-go="login" data-i18n="back_login"></button></p>
+          </form>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

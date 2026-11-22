@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك</title>
+  <script>try{var l=localStorage.getItem("aqarak_lang")==="en"?"en":"ar";document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";}catch(e){}</script>
+  <script src="js/guard.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="prefs" data-title="page_prefs">
+
+  <div id="site-header"></div>
+
+  <main class="prefs-page">
+    <div class="container">
+      <div class="prefs-card">
+        <ol class="stepper" id="stepper">
+          <li data-step="1" class="done"><span>1</span><b data-i18n="step_role"></b></li>
+          <li data-step="2" class="done"><span>2</span><b data-i18n="step_info"></b></li>
+          <li data-step="3" class="active"><span>3</span><b data-i18n="step_prefs"></b></li>
+        </ol>
+        <h1 id="prefsHello"></h1>
+        <p class="sub" data-i18n="prefs_sub"></p>
+        <div id="prefsHost"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/prefs.js"></script>
+  <script>
+    (function () {
+      const user = Auth.current();
+      const params = new URLSearchParams(location.search);
+      const next = safeNext(params.get("next"));
+      if (!user) { location.replace("auth.html?next=preferences.html#login"); return; }
+      if (params.get("welcome") !== "1") document.getElementById("stepper").classList.add("hidden");
+
+      const hello = document.getElementById("prefsHello");
+      if (params.get("welcome") === "1") {
+        hello.textContent = t("prefs_welcome", { name: user.name.split(" ")[0] });
+        hello.insertAdjacentHTML("beforeend", waveIcon());
+      } else {
+        hello.textContent = t("prefs_title");
+      }
+
+      const done = (msgKey) => {
+        if (msgKey) sessionStorage.setItem("aqarak_flash", t(msgKey));
+        location.href = next;
+      };
+      PrefsForm.mount(document.getElementById("prefsHost"), {
+        mode: "wizard",
+        role: user.role,
+        initial: user.prefs,
+        onSave(prefs) { Auth.updateUser(user.id, { prefs }); done("prefs_saved"); },
+        onSkip() { done(); },
+      });
+    })();
+  </script>
+</body>
+</html>

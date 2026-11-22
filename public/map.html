@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك</title>
+  <script>try{var l=localStorage.getItem("aqarak_lang")==="en"?"en":"ar";document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";}catch(e){}</script>
+  <script src="js/guard.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="map" data-title="page_map" class="map-body">
+
+  <div id="site-header"></div>
+
+  <main class="map-page">
+    <!-- ===== Side panel ===== -->
+    <aside class="map-side">
+      <div class="map-side-head">
+        <h1 data-i18n="map_title"></h1>
+        <p data-i18n="map_sub"></p>
+      </div>
+
+      <div class="map-tools" role="toolbar">
+        <button type="button" class="tool-btn" data-tool="pen"><span data-ico="pen"></span><b data-i18n="tool_pen"></b></button>
+        <button type="button" class="tool-btn" data-tool="circle"><span class="circle-ico"></span><b data-i18n="tool_circle"></b></button>
+        <button type="button" class="tool-btn" data-tool="clear" disabled><span data-ico="eraser"></span><b data-i18n="tool_clear"></b></button>
+      </div>
+      <p class="map-hint" id="mapHint" data-i18n="hint_idle"></p>
+
+      <div class="map-filters">
+        <div class="seg" id="purposeSeg" style="margin-top:0">
+          <button type="button" data-purpose="" class="active" data-i18n="st_all"></button>
+          <button type="button" data-purpose="sale" data-i18n="for_sale"></button>
+          <button type="button" data-purpose="rent" data-i18n="for_rent"></button>
+        </div>
+        <select class="input" id="typeSel"></select>
+      </div>
+
+      <div class="map-results-head">
+        <strong id="resultTitle"></strong>
+        <small id="resultSub"></small>
+      </div>
+      <div class="map-results" id="results"></div>
+      <p class="hint hidden" id="osmNote" data-i18n="osm_note"></p>
+    </aside>
+
+    <!-- ===== Map ===== -->
+    <div class="map-wrap">
+      <div id="map"><div class="map-loading" data-i18n="map_loading"></div></div>
+      <div class="map-legend">
+        <span><i class="dot sale"></i><b data-i18n="for_sale"></b></span>
+        <span><i class="dot rent"></i><b data-i18n="for_rent"></b></span>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/geo.js"></script>
+  <script src="js/mappage.js"></script>
+</body>
+</html>

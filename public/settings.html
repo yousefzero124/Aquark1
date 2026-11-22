@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك</title>
+  <script>try{var l=localStorage.getItem("aqarak_lang")==="en"?"en":"ar";document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";}catch(e){}</script>
+  <script src="js/guard.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="settings" data-title="page_settings">
+
+  <div id="site-header"></div>
+
+  <section class="page-head">
+    <div class="container">
+      <h1 data-i18n="settings_title"></h1>
+      <p data-i18n="settings_sub"></p>
+    </div>
+  </section>
+
+  <main class="container hidden" id="gate"></main>
+
+  <main class="container settings-layout hidden" id="settingsArea">
+    <!-- ===== Sidebar ===== -->
+    <aside class="settings-side">
+      <div class="profile-mini" id="profileMini"></div>
+      <nav class="settings-tabs" id="settingsTabs">
+        <button type="button" data-tab="profile"><span data-ico="user"></span><b data-i18n="tab_profile"></b></button>
+        <button type="button" data-tab="prefs"><span data-ico="sliders"></span><b data-i18n="tab_prefs"></b></button>
+        <button type="button" data-tab="security"><span data-ico="lock"></span><b data-i18n="tab_security"></b></button>
+        <button type="button" data-tab="account"><span data-ico="gear"></span><b data-i18n="tab_account"></b></button>
+      </nav>
+    </aside>
+
+    <section>
+      <!-- ===== Profile ===== -->
+      <form class="card settings-panel" id="panel-profile" novalidate>
+        <h3 data-i18n="tab_profile"></h3>
+        <div class="form-error hidden" data-error></div>
+
+        <div class="avatar-edit">
+          <div class="avatar avatar-lg" id="avatarPreview"></div>
+          <div>
+            <div class="btn-row">
+              <label class="btn btn-outline btn-sm" for="avatarInput" data-i18n="change_photo"></label>
+              <button type="button" class="btn btn-ghost btn-sm" id="avatarRemove" data-i18n="remove_photo"></button>
+            </div>
+            <small class="hint" data-i18n="photo_hint"></small>
+          </div>
+          <input type="file" id="avatarInput" accept="image/*" hidden>
+        </div>
+
+        <div class="row-2">
+          <div class="form-group">
+            <label for="pName" class="required" data-i18n="l_name"></label>
+            <input class="input" id="pName" type="text" maxlength="60" autocomplete="name">
+          </div>
+          <div class="form-group">
+            <label for="pEmail" data-i18n="l_email"></label>
+            <input class="input" id="pEmail" type="email" dir="ltr" readonly>
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="form-group">
+            <label for="pPhone" class="required" data-i18n="l_mobile"></label>
+            <input class="input" id="pPhone" type="tel" maxlength="15" dir="ltr" autocomplete="tel">
+          </div>
+          <div class="form-group">
+            <label for="pRole" data-i18n="l_role"></label>
+            <select class="input" id="pRole"></select>
+            <small class="hint hidden" id="roleLocked" data-i18n="role_locked_admin"></small>
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="form-group">
+            <label for="pAge" class="required" data-i18n="l_age"></label>
+            <input class="input" id="pAge" type="number" min="18" max="100" dir="ltr">
+          </div>
+          <div class="form-group">
+            <span class="label required" data-i18n="l_gender"></span>
+            <div class="gender-picker">
+              <input type="radio" name="pGender" id="pgMale" value="male"><label for="pgMale" data-i18n="male"></label>
+              <input type="radio" name="pGender" id="pgFemale" value="female"><label for="pgFemale" data-i18n="female"></label>
+            </div>
+          </div>
+        </div>
+        <div class="row-2">
+          <div class="form-group">
+            <label for="pCity" class="required" data-i18n="l_user_city"></label>
+            <select class="input" id="pCity"></select>
+          </div>
+          <div class="form-group">
+            <label for="pAddress" class="required" data-i18n="l_user_address"></label>
+            <input class="input" id="pAddress" type="text" maxlength="150" data-i18n-ph="ph_user_address">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg" type="submit" data-i18n="save"></button>
+      </form>
+
+      <!-- ===== Preferences ===== -->
+      <div class="card settings-panel hidden" id="panel-prefs">
+        <h3 data-i18n="tab_prefs"></h3>
+        <p class="sub" style="margin-top:-8px" data-i18n="prefs_sub"></p>
+        <div id="prefsHost"></div>
+      </div>
+
+      <!-- ===== Security ===== -->
+      <form class="card settings-panel hidden" id="panel-security" novalidate>
+        <h3 data-i18n="tab_security"></h3>
+        <div class="form-error hidden" data-error></div>
+        <div class="form-note hidden" id="googleNote" data-i18n="google_set_password"></div>
+        <div class="form-group" id="curPassGroup">
+          <label for="sCur" data-i18n="l_current_password"></label>
+          <input class="input" id="sCur" type="password" autocomplete="current-password">
+        </div>
+        <div class="row-2">
+          <div class="form-group">
+            <label for="sNew" data-i18n="l_new_password"></label>
+            <input class="input" id="sNew" type="password" autocomplete="new-password" data-i18n-ph="ph_password">
+          </div>
+          <div class="form-group">
+            <label for="sNew2" data-i18n="l_confirm"></label>
+            <input class="input" id="sNew2" type="password" autocomplete="new-password">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg" type="submit" data-i18n="save"></button>
+      </form>
+
+      <!-- ===== Account ===== -->
+      <div class="card settings-panel hidden" id="panel-account">
+        <h3 data-i18n="tab_account"></h3>
+        <div class="account-row">
+          <div><strong data-i18n="switch_account"></strong><p data-i18n="switch_account_d"></p></div>
+          <button type="button" class="btn btn-outline" id="switchAccount" data-i18n="switch_account"></button>
+        </div>
+        <div class="account-row danger">
+          <div><strong data-i18n="delete_account"></strong><p data-i18n="delete_account_d"></p></div>
+          <button type="button" class="btn btn-danger" id="deleteAccount" data-i18n="delete_account"></button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/prefs.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>

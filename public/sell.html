@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك</title>
+  <script>try{var l=localStorage.getItem("aqarak_lang")==="en"?"en":"ar";document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";}catch(e){}</script>
+  <script src="js/guard.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="sell" data-title="page_sell">
+
+  <div id="site-header"></div>
+
+  <section class="page-head">
+    <div class="container">
+      <h1 data-i18n="sell_title"></h1>
+      <p data-i18n="sell_sub"></p>
+    </div>
+  </section>
+
+  <!-- بيظهر لو المستخدم مش مسجل أو مش بائع -->
+  <main class="container hidden" id="gate"></main>
+
+  <main class="container sell-layout hidden" id="sellArea">
+    <form id="sellForm" novalidate>
+      <div class="card">
+        <h3 data-i18n="basic_info"></h3>
+        <div class="form-error hidden" data-error></div>
+
+        <div class="form-group">
+          <span class="label required" data-i18n="l_purpose"></span>
+          <div class="seg" id="purposeSeg" style="margin-top:0">
+            <button type="button" data-purpose="sale" class="active" data-i18n="for_sale"></button>
+            <button type="button" data-purpose="rent" data-i18n="for_rent"></button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="sTitle" class="required" data-i18n="l_title"></label>
+          <input class="input" id="sTitle" type="text" maxlength="90" data-i18n-ph="ph_title">
+        </div>
+
+        <div class="row-2">
+          <div class="form-group">
+            <label for="sType" class="required" data-i18n="l_type"></label>
+            <select class="input" id="sType"></select>
+          </div>
+          <div class="form-group">
+            <label for="sCity" class="required" data-i18n="l_city"></label>
+            <select class="input" id="sCity"></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="sAddress" class="required" data-i18n="l_address"></label>
+          <input class="input" id="sAddress" type="text" maxlength="120" data-i18n-ph="ph_address">
+        </div>
+
+        <div class="row-2">
+          <div class="form-group">
+            <label for="sPrice" class="required" id="priceLabel"></label>
+            <input class="input" id="sPrice" type="number" min="1" step="1000" dir="ltr">
+          </div>
+          <div class="form-group">
+            <label for="sSize" class="required" data-i18n="l_size"></label>
+            <input class="input" id="sSize" type="number" min="1" dir="ltr">
+          </div>
+        </div>
+
+        <div class="row-2">
+          <div class="form-group">
+            <label for="sBeds" data-i18n="l_beds"></label>
+            <input class="input" id="sBeds" type="number" min="0" max="20" value="0" dir="ltr">
+          </div>
+          <div class="form-group">
+            <label for="sBaths" data-i18n="l_baths"></label>
+            <input class="input" id="sBaths" type="number" min="0" max="20" value="0" dir="ltr">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="sDesc" data-i18n="l_desc"></label>
+          <textarea class="input" id="sDesc" maxlength="1500" data-i18n-ph="ph_desc"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="sPhone" class="required" data-i18n="l_phone"></label>
+          <input class="input" id="sPhone" type="tel" maxlength="15" data-i18n-ph="ph_phone" dir="ltr">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 data-i18n="l_location"></h3>
+        <p class="hint" style="margin:-8px 0 12px" data-i18n="location_hint"></p>
+        <div class="picker-map" id="pickerMap"><div class="map-loading" data-i18n="map_loading"></div></div>
+        <small class="hint" id="pickerStatus"></small>
+      </div>
+
+      <div class="card">
+        <h3 data-i18n="l_images"></h3>
+        <label class="dropzone" id="dropzone" for="sImages">
+          <span id="dzIcon"></span>
+          <span data-i18n="images_hint"></span>
+          <small data-i18n="images_limit"></small>
+        </label>
+        <input id="sImages" type="file" accept="image/*" multiple hidden>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+
+      <button class="btn btn-primary btn-lg btn-block" type="submit" style="margin-top:20px" id="submitBtn" data-i18n="submit_listing"></button>
+    </form>
+
+    <aside>
+      <div class="card" id="mine">
+        <h3 data-i18n="my_listings"></h3>
+        <div class="my-list" id="myList"></div>
+      </div>
+      <div class="card">
+        <h3 data-i18n="tips_title"></h3>
+        <div class="role-card" style="border:0;padding:0">
+          <ul>
+            <li data-i18n="tip_1"></li>
+            <li data-i18n="tip_2"></li>
+            <li data-i18n="tip_3"></li>
+          </ul>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/geo.js"></script>
+  <script src="js/sell.js"></script>
+</body>
+</html>

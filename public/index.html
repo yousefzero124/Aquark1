@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك</title>
+  <meta name="description" content="عقارك — منصة بسيطة لعرض وبيع وشراء وتأجير العقارات.">
+  <script>try{var l=localStorage.getItem("aqarak_lang")==="en"?"en":"ar";document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";}catch(e){}</script>
+  <script src="js/guard.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="home" data-title="page_home">
+
+  <div id="site-header"></div>
+
+  <main>
+    <!-- ===== Hero ===== -->
+    <section class="hero hero-video">
+      <!-- فيديو الخلفية (الرابط في js/config.js → HERO_VIDEO_URL) -->
+      <video class="hero-bg" id="heroVideo" muted loop playsinline preload="auto" aria-hidden="true"></video>
+      <div class="hero-overlay"></div>
+
+      <div class="container hero-content">
+        <div class="hero-text">
+          <span class="badge" data-i18n="hero_badge"></span>
+          <h1><span data-i18n="hero_title_1"></span> <mark data-i18n="hero_title_2"></mark> <span data-i18n="hero_title_3"></span></h1>
+          <p class="lead" data-i18n="hero_sub"></p>
+
+          <form class="search-box" id="heroSearch">
+            <div class="search-tabs" role="tablist">
+              <button type="button" class="active" data-mode="buy" data-i18n="search_buy"></button>
+              <button type="button" data-mode="rent" data-i18n="search_rent"></button>
+            </div>
+            <div class="search-row">
+              <div class="field">
+                <label for="hsCity" data-i18n="search_city"></label>
+                <select id="hsCity"></select>
+              </div>
+              <div class="field">
+                <label for="hsType" data-i18n="search_type"></label>
+                <select id="hsType"></select>
+              </div>
+              <button class="btn btn-primary btn-lg" type="submit" id="hsSubmit"></button>
+            </div>
+          </form>
+
+          <div class="hero-chips">
+            <div class="hero-chip" id="heroFloat1"></div>
+            <div class="hero-chip" id="heroFloat2"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Stats ===== -->
+    <section class="stats-band">
+      <div class="container">
+        <div class="stats" id="stats"></div>
+      </div>
+    </section>
+
+    <!-- ===== Recommended (على حسب التفضيلات) ===== -->
+    <section class="section hidden" id="recSection" style="padding-bottom:0">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="rec_title"></h2>
+            <p data-i18n="rec_sub"></p>
+          </div>
+          <a href="settings.html#prefs" class="btn btn-outline" data-i18n="edit_prefs"></a>
+        </div>
+        <div class="prop-grid" id="recommended"></div>
+      </div>
+    </section>
+
+    <!-- ===== Categories ===== -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="cat_title"></h2>
+            <p data-i18n="cat_sub"></p>
+          </div>
+        </div>
+        <div class="cat-grid" id="categories"></div>
+      </div>
+    </section>
+
+    <!-- ===== Featured ===== -->
+    <section class="section section-soft">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="featured_title"></h2>
+            <p data-i18n="featured_sub"></p>
+          </div>
+          <a href="properties.html?mode=buy" class="btn btn-outline" data-i18n="view_all"></a>
+        </div>
+        <div class="prop-grid" id="featured"></div>
+      </div>
+    </section>
+
+    <!-- ===== Roles ===== -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="roles_title"></h2>
+            <p data-i18n="roles_sub"></p>
+          </div>
+        </div>
+        <div class="roles-grid" id="roles"></div>
+      </div>
+    </section>
+
+    <!-- ===== CTA ===== -->
+    <section class="container" style="padding-bottom:40px">
+      <div class="cta">
+        <div>
+          <h2 data-i18n="cta_title"></h2>
+          <p data-i18n="cta_sub"></p>
+        </div>
+        <a href="sell.html" class="btn btn-dark btn-lg" data-i18n="cta_btn"></a>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/home.js"></script>
+</body>
+</html>

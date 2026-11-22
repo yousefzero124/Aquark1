@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك</title>
+  <script>try{var l=localStorage.getItem("aqarak_lang")==="en"?"en":"ar";document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";}catch(e){}</script>
+  <script src="js/guard.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="admin" data-title="page_admin">
+
+  <div id="site-header"></div>
+
+  <section class="page-head">
+    <div class="container">
+      <h1 data-i18n="admin_title"></h1>
+      <p data-i18n="admin_sub"></p>
+      <div class="seg hidden" id="adminTabs">
+        <button type="button" data-tab="overview" data-i18n="tab_overview"></button>
+        <button type="button" data-tab="users" data-i18n="tab_users"></button>
+        <button type="button" data-tab="listings" data-i18n="tab_listings"></button>
+      </div>
+    </div>
+  </section>
+
+  <main class="container hidden" id="gate"></main>
+
+  <main class="container admin-area hidden" id="adminArea">
+
+    <!-- ===== Overview ===== -->
+    <section id="panel-overview">
+      <div class="kpis" id="kpis"></div>
+      <div class="dash-grid">
+        <div class="card"><h3 data-i18n="chart_roles"></h3><div class="bars" id="chartRoles"></div></div>
+        <div class="card"><h3 data-i18n="chart_purpose"></h3><div class="bars" id="chartPurpose"></div></div>
+        <div class="card"><h3 data-i18n="chart_cities"></h3><div class="bars" id="chartCities"></div></div>
+        <div class="card"><h3 data-i18n="chart_types"></h3><div class="bars" id="chartTypes"></div></div>
+        <div class="card"><h3 data-i18n="recent_users"></h3><div class="mini-list" id="recentUsers"></div></div>
+        <div class="card"><h3 data-i18n="recent_listings"></h3><div class="mini-list" id="recentListings"></div></div>
+      </div>
+      <p class="hint" style="margin-top:16px" data-i18n="dash_note"></p>
+    </section>
+
+    <!-- ===== Users ===== -->
+    <section id="panel-users" class="hidden">
+      <div class="card">
+        <div class="table-tools">
+          <div class="search-input">
+            <span data-ico="search"></span>
+            <input class="input" id="userQuery" type="search" data-i18n-ph="search_users_ph">
+          </div>
+          <div class="chips" id="roleFilter"></div>
+          <span class="count" id="userCount"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="col_user"></th>
+                <th data-i18n="col_role"></th>
+                <th data-i18n="col_phone"></th>
+                <th data-i18n="col_city"></th>
+                <th data-i18n="col_joined"></th>
+                <th data-i18n="col_actions"></th>
+              </tr>
+            </thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Listings ===== -->
+    <section id="panel-listings" class="hidden">
+      <div class="card">
+        <div class="table-tools">
+          <div class="search-input">
+            <span data-ico="search"></span>
+            <input class="input" id="listingQuery" type="search" data-i18n-ph="search_listings_ph">
+          </div>
+          <div class="chips" id="statusFilter"></div>
+          <span class="count" id="listingCount"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="col_listing"></th>
+                <th data-i18n="col_price"></th>
+                <th data-i18n="col_owner"></th>
+                <th data-i18n="col_status"></th>
+                <th data-i18n="col_actions"></th>
+              </tr>
+            </thead>
+            <tbody id="listingsBody"></tbody>
+          </table>
+        </div>
+        <p class="hint" data-i18n="seed_note"></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

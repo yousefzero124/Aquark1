@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك</title>
+  <script>try{var l=localStorage.getItem("aqarak_lang")==="en"?"en":"ar";document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";}catch(e){}</script>
+  <script src="js/guard.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="props" data-title="page_props">
+
+  <div id="site-header"></div>
+
+  <section class="page-head">
+    <div class="container">
+      <h1 id="pageTitle"></h1>
+      <p data-i18n="props_sub"></p>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="buy" data-i18n="nav_buy"></button>
+        <button type="button" data-mode="rent" data-i18n="nav_rent"></button>
+      </div>
+    </div>
+  </section>
+
+  <main class="container listing-layout">
+    <!-- ===== Filters ===== -->
+    <aside class="filters" id="filters">
+      <h3>
+        <span data-i18n="filters"></span>
+        <button type="button" class="modal-close close-filters" id="closeFilters" style="position:static;box-shadow:none;background:var(--bg-soft)"></button>
+      </h3>
+
+      <div class="form-group">
+        <label for="fCity" data-i18n="f_city"></label>
+        <select class="input" id="fCity"></select>
+      </div>
+      <div class="form-group">
+        <label for="fType" data-i18n="f_type"></label>
+        <select class="input" id="fType"></select>
+      </div>
+      <div class="form-group">
+        <span class="label" data-i18n="f_price"></span>
+        <div class="row-2">
+          <input class="input" id="fMin" type="number" min="0" step="1000" data-i18n-ph="f_min" dir="ltr">
+          <input class="input" id="fMax" type="number" min="0" step="1000" data-i18n-ph="f_max" dir="ltr">
+        </div>
+      </div>
+      <div class="form-group">
+        <span class="label" data-i18n="f_beds"></span>
+        <div class="chips" id="fBeds"></div>
+      </div>
+      <div class="form-group" id="favsWrap">
+        <label class="check"><input type="checkbox" id="fFavs"><span data-i18n="f_favs"></span></label>
+      </div>
+
+      <button type="button" class="btn btn-outline btn-block" id="resetFilters" data-i18n="f_reset"></button>
+      <button type="button" class="btn btn-primary btn-block open-filters" id="applyFilters" style="margin-top:10px" data-i18n="show_results"></button>
+    </aside>
+
+    <!-- ===== Results ===== -->
+    <section>
+      <div class="type-chips" id="typeChips"></div>
+      <div class="results-bar">
+        <div class="count" id="resultCount"></div>
+        <div class="tools">
+          <div class="search-input">
+            <span id="searchIco"></span>
+            <input class="input" id="fQuery" type="search" data-i18n-ph="search_ph">
+          </div>
+          <select class="input" id="fSort" style="width:auto"></select>
+          <button type="button" class="btn btn-outline open-filters" id="openFilters"></button>
+        </div>
+      </div>
+      <div class="prop-grid" id="results"></div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/properties.js"></script>
+</body>
+</html>

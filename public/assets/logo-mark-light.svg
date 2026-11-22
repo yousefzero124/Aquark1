@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="450 318 372 264" role="img" aria-label="عقارك">
+  <!-- نسخة فاتحة من اللوجو للخلفيات السودا (الفوتر) -->
+  <g fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">
+    <polygon points="512,410 568,378 568,434 512,472"/>
+    <polygon points="582,360 646,325 646,446 604,410 582,425"/>
+    <polygon points="660,342 705,368 705,496 660,458"/>
+    <polygon points="716,422 755,447 755,520 716,506"/>
+  </g>
+  <path d="M458,508 L604,410 L742,528 L712,530 L604,440 L531,490 L531,508 Z"
+        fill="#F5B800" stroke="#121214" stroke-width="9" stroke-linejoin="round" paint-order="stroke"/>
+  <g fill="#F5B800">
+    <rect x="580" y="477" width="18" height="17" rx="2"/>
+    <rect x="606" y="477" width="18" height="17" rx="2"/>
+    <rect x="580" y="500" width="18" height="17" rx="2"/>
+    <rect x="606" y="500" width="18" height="17" rx="2"/>
+  </g>
+  <path d="M457,575 Q590,518 815,558 Q625,538 457,575 Z" fill="#F5B800"/>
+</svg>
