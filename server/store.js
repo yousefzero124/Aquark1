@@ -166,10 +166,21 @@ async function pgStore(url) {
   };
 }
 
+// لينك قاعدة البيانات: Vercel/Neon ممكن يسمّيه DATABASE_URL أو POSTGRES_URL،
+// ولو اتحط "Custom Prefix" وقت الربط بيبقى مثلاً STORAGE_DATABASE_URL
+function databaseUrl() {
+  const env = process.env;
+  if (env.DATABASE_URL) return env.DATABASE_URL;
+  if (env.POSTGRES_URL) return env.POSTGRES_URL;
+  const key = Object.keys(env).find((k) => /_(DATABASE_URL|POSTGRES_URL)$/.test(k) && /^postgres(ql)?:\/\//.test(env[k] || ""));
+  return key ? env[key] : "";
+}
+
 let storePromise = null;
 function getStore() {
   if (!storePromise) {
-    if (process.env.DATABASE_URL) storePromise = pgStore(process.env.DATABASE_URL);
+    const url = databaseUrl();
+    if (url) storePromise = pgStore(url);
     else if (process.env.VERCEL) storePromise = Promise.reject(configError()); // على Vercel لازم قاعدة بيانات
     else storePromise = Promise.resolve(fileStore());
     storePromise.catch(() => { storePromise = null; }); // لو فشل، يحاول تاني في الطلب الجاي
@@ -177,4 +188,4 @@ function getStore() {
   return storePromise;
 }
 
-module.exports = { getStore, DATA_DIR };
+module.exports = { getStore, databaseUrl, DATA_DIR };

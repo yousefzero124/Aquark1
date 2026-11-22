@@ -20,7 +20,7 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { getStore, DATA_DIR } = require("./store");
+const { getStore, databaseUrl, DATA_DIR } = require("./store");
 
 const IS_VERCEL = !!process.env.VERCEL;
 const ROLES = ["buyer", "investor", "broker", "admin"];
@@ -528,9 +528,26 @@ function send(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+// فحص الإعدادات: افتح /api/health — بيقول كل إعداد موجود ولا لأ (من غير ما يعرض أي قيمة سرية)
+async function health(res) {
+  let database = "missing";
+  if (databaseUrl() || !IS_VERCEL) {
+    try { await getStore(); database = "ok"; } catch (e) { database = "error"; }
+  }
+  const secret = process.env.SESSION_SECRET || "";
+  send(res, 200, {
+    database,
+    sessionSecret: IS_VERCEL ? (secret.length >= 32 ? "ok" : secret ? "too_short" : "missing") : "ok (local)",
+    adminCode: adminCode() ? "ok" : "missing",
+    resetEmail: process.env.RESEND_API_KEY && process.env.EMAIL_FROM ? "ok" : "off",
+    google: process.env.GOOGLE_CLIENT_ID ? "ok" : "off",
+  });
+}
+
 async function handleApi(req, res, pathname) {
   try {
     const method = req.method || "GET";
+    if (method === "GET" && pathname.replace(/\/+$/, "") === "/api/health") return await health(res);
     const found = match(method, pathname);
     if (!found) fail(404, "err_not_found");
     let body = {};
