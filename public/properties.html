@@ -56,12 +56,22 @@
         <span class="label" data-i18n="f_beds"></span>
         <div class="chips" id="fBeds"></div>
       </div>
+      <div class="form-group">
+        <label class="check"><input type="checkbox" id="fPano"><span data-i18n="f_pano"></span></label>
+      </div>
       <div class="form-group" id="favsWrap">
         <label class="check"><input type="checkbox" id="fFavs"><span data-i18n="f_favs"></span></label>
       </div>
 
       <button type="button" class="btn btn-outline btn-block" id="resetFilters" data-i18n="f_reset"></button>
       <button type="button" class="btn btn-primary btn-block open-filters" id="applyFilters" style="margin-top:10px" data-i18n="show_results"></button>
+
+      <!-- عمليات البحث المحفوظة: بيجيلك إشعار لما ينزل عقار مطابق -->
+      <div class="saved-searches" id="savedSearches">
+        <h4><span id="ssIco"></span><span data-i18n="ss_title"></span></h4>
+        <p class="hint" data-i18n="ss_sub"></p>
+        <div class="ss-list" id="ssList"></div>
+      </div>
     </aside>
 
     <!-- ===== Results ===== -->
@@ -75,6 +85,7 @@
             <input class="input" id="fQuery" type="search" data-i18n-ph="search_ph">
           </div>
           <select class="input" id="fSort" style="width:auto"></select>
+          <button type="button" class="btn btn-outline save-search-btn" id="saveSearch"></button>
           <button type="button" class="btn btn-outline open-filters" id="openFilters"></button>
         </div>
       </div>

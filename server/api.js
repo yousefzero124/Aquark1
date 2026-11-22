@@ -326,6 +326,7 @@ const routes = {
       google_sub: google ? google.sub : null,
       ...profile,
     });
+    await hooks.onRegister(store, user);
     setSession(req, res, user);
     return { status: 201, data: { user: publicUser(user) } };
   },
@@ -398,6 +399,7 @@ const routes = {
     if (!user) fail(400, "err_code");
     await store.updateUser(user.id, { pass_hash: await hashPassword(body.password) });
     await store.deleteReset(email);
+    await hooks.onPassword(store, user);
     return { ok: true };
   },
 
@@ -430,6 +432,8 @@ const routes = {
       patch.role = body.role;
     }
     const updated = await store.updateUser(user.id, patch);
+    if (patch.prefs) await hooks.onPrefs(store, user.id); // تذكير "حدد تفضيلاتك" يتشال
+    if (patch.name && patch.name !== user.name) await hooks.onName(store, user.id, patch.name);
     return { user: publicUser(updated) };
   },
 
@@ -439,12 +443,14 @@ const routes = {
     if (user.pass_hash && !(await verifyPassword(String(body.current || ""), user.pass_hash))) fail(400, "err_current_password");
     checkPassword(body.password);
     const updated = await store.updateUser(user.id, { pass_hash: await hashPassword(body.password) });
+    await hooks.onPassword(store, updated);
     setSession(req, res, updated); // الجلسة دي تفضل شغالة، والباقي يبطل
     return { user: publicUser(updated) };
   },
 
   async "DELETE /api/me"({ req, res, store }) {
     const user = await requireUser(req, store);
+    await hooks.purgeUser(store, user.id);
     await store.deleteUser(user.id);
     clearSession(req, res);
     return { ok: true };
@@ -462,8 +468,10 @@ const routes = {
     if (me.role !== "admin") fail(403, "err_forbidden");
     if (!ROLES.includes(body.role)) fail(400, "err_role");
     if (params.id === me.id && body.role !== "admin") fail(400, "err_self");
+    const before = await store.getUserById(params.id);
+    if (!before) fail(404, "err_no_user");
     const updated = await store.updateUser(params.id, { role: body.role });
-    if (!updated) fail(404, "err_no_user");
+    if (before.role !== body.role) await hooks.onRole(store, params.id, body.role);
     return { user: publicUser(updated) };
   },
 
@@ -471,10 +479,15 @@ const routes = {
     const me = await requireUser(req, store);
     if (me.role !== "admin") fail(403, "err_forbidden");
     if (params.id === me.id) fail(400, "err_self");
+    await hooks.purgeUser(store, params.id);
     await store.deleteUser(params.id);
     return { ok: true };
   },
 };
+
+// الإعلانات والمفضلة والإشعارات والمحادثات والبحث المحفوظ (server/features.js)
+const { routes: featureRoutes, hooks } = require("./features")({ fail, requireUser, str, limit });
+Object.assign(routes, featureRoutes);
 
 // بيلاقي الـ route المناسب (بما فيها اللي فيها :id)
 function match(method, pathname) {
@@ -508,7 +521,8 @@ function readBody(req) {
     const chunks = [];
     req.on("data", (c) => {
       size += c.length;
-      if (size > 300 * 1024) { reject(new ApiError(413, "err_generic")); req.destroy(); return; }
+      // 4.5 MB (حد Vercel) — عشان صور الإعلان وصورة الـ 360
+      if (size > 4.5 * 1024 * 1024) { reject(new ApiError(413, "err_image_big")); req.destroy(); return; }
       chunks.push(c);
     });
     req.on("end", () => {
@@ -559,7 +573,16 @@ async function handleApi(req, res, pathname) {
       if (!body || typeof body !== "object" || Array.isArray(body)) fail(400, "err_generic");
     }
     const store = await getStore();
-    const out = await found.fn({ req, res, body, store, params: found.params });
+    const query = new URL(req.url || "/", "http://localhost").searchParams;
+    const out = await found.fn({ req, res, body, store, params: found.params, query });
+    // ملفات (صور الإعلانات)
+    if (out && out.raw) {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", out.type || "application/octet-stream");
+      res.setHeader("Cache-Control", out.cache || "no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      return res.end(out.raw);
+    }
     if (out && out.status && out.data) return send(res, out.status, out.data);
     return send(res, 200, out || { ok: true });
   } catch (err) {

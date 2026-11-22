@@ -2,7 +2,7 @@
    الصفحة الرئيسية
    ========================================================= */
 (function () {
-  const all = Listings.all();
+  let all = Listings.all();
 
   /* --- Search box --- */
   let mode = "buy";
@@ -40,6 +40,9 @@
     `<span class="ico">${icon("bolt", "font-size:18px")}</span>
      <div>${esc(t("float_new"))}<small>${esc(t("float_new_d"))}</small></div>`;
 
+  /* --- الأقسام اللي بتعتمد على الإعلانات (بتتعاد لما إعلانات جديدة توصل من السيرفر) --- */
+  function renderListingSections() {
+  all = Listings.all();
   /* --- Stats (محسوبة من البيانات الحقيقية) --- */
   const usedCities = new Set(all.map((l) => l.city)).size;
   const usedTypes = new Set(all.map((l) => l.type)).size;
@@ -75,7 +78,7 @@
       recHost.innerHTML = recs.length
         ? recs.map((x) => propCard(x.l)).join("")
         : `<div class="empty" style="grid-column:1/-1">${ICONS.search}<div>${esc(t("no_rec"))}</div></div>`;
-    } else {
+    } else if (recHost) {
       // لسه محددش تفضيلات → دعوة يحددها
       recSection.querySelector(".section-head").classList.add("hidden");
       recHost.outerHTML = `
@@ -92,6 +95,9 @@
     .sort((a, b) => (Moderation.isFeatured(b) ? 1 : 0) - (Moderation.isFeatured(a) ? 1 : 0) || String(b.createdAt).localeCompare(String(a.createdAt)))
     .slice(0, 6);
   document.getElementById("featured").innerHTML = featured.map(propCard).join("");
+  }
+  renderListingSections();
+  document.addEventListener("listings:changed", renderListingSections);
 
   /* --- Roles --- */
   const roles = [

@@ -38,7 +38,6 @@
     if (l.ownerId) { const u = Auth.users().find((x) => x.id === l.ownerId); return u ? u.name : (l.owner || "—"); }
     return l.owner || "—";
   };
-
   /* --- Tabs --- */
   const TABS = ["overview", "users", "listings"];
   function showTab(tab) {
@@ -201,9 +200,8 @@
     if (!sel || sel.dataset.roleFor === me.id || !ROLES.includes(sel.value)) return;
     sel.disabled = true;
     try {
-      await Auth.setRole(sel.dataset.roleFor, sel.value);
+      await Auth.setRole(sel.dataset.roleFor, sel.value); // السيرفر بيبعتله إشعار
       await Auth.loadUsers();
-      Notifs.push(sel.dataset.roleFor, "role", { role: sel.value });
       toast(t("role_changed"), "success");
     } catch (err) {
       toast(t(err.message));
@@ -290,32 +288,41 @@
     const b = e.target.closest("[data-status]");
     if (b) { statusFilter = b.dataset.status; renderListings(); }
   });
-  $("listingsBody").addEventListener("click", (e) => {
+  // التوثيق / التمييز / الإخفاء / الحذف — بيتحفظوا على السيرفر (وكل الناس بتشوف التغيير)
+  $("listingsBody").addEventListener("click", async (e) => {
     const f = e.target.closest("[data-feature]");
     const h = e.target.closest("[data-hide]");
     const d = e.target.closest("[data-del-listing]");
     const v = e.target.closest("[data-verify]");
-    if (v) {
-      const l = Listings.get(v.dataset.verify);
-      const on = !Moderation.isVerified(l);
-      Moderation.setVerified(l.id, on);
-      toast(t(on ? "listing_verified" : "listing_unverified"), "success");
-    } else if (f) {
-      const l = Listings.get(f.dataset.feature);
-      const on = !Moderation.isFeatured(l);
-      Moderation.setFeatured(l.id, on);
-      toast(t(on ? "listing_featured" : "listing_unfeatured"), "success");
-    } else if (h) {
-      const on = !Moderation.isHidden(h.dataset.hide);
-      Moderation.setHidden(h.dataset.hide, on);
-      toast(t(on ? "listing_hidden" : "listing_shown"), "success");
-    } else if (d) {
-      if (Listings.isSeed(d.dataset.delListing) || !confirm(t("confirm_delete"))) return;
-      Listings.remove(d.dataset.delListing);
-      toast(t("deleted"));
-    } else return;
-    renderAll();
+    const btn = v || f || h || d;
+    if (!btn) return;
+    if (d && (Listings.isSeed(d.dataset.delListing) || !confirm(t("confirm_delete")))) return;
+    btn.disabled = true;
+    try {
+      if (v) {
+        const l = Listings.get(v.dataset.verify);
+        const on = !Moderation.isVerified(l);
+        await Moderation.setVerified(l.id, on);
+        toast(t(on ? "listing_verified" : "listing_unverified"), "success");
+      } else if (f) {
+        const l = Listings.get(f.dataset.feature);
+        const on = !Moderation.isFeatured(l);
+        await Moderation.setFeatured(l.id, on);
+        toast(t(on ? "listing_featured" : "listing_unfeatured"), "success");
+      } else if (h) {
+        const on = !Moderation.isHidden(h.dataset.hide);
+        await Moderation.setHidden(h.dataset.hide, on);
+        toast(t(on ? "listing_hidden" : "listing_shown"), "success");
+      } else if (d) {
+        await Listings.remove(d.dataset.delListing);
+        toast(t("deleted"));
+      }
+    } catch (err) {
+      btn.disabled = false;
+      toast(t(err.message), "error");
+    }
   });
+  document.addEventListener("listings:changed", () => renderAll());
 
   /* --- Render --- */
   function renderAll() {

@@ -171,6 +171,8 @@ const GeoMap = {
         return { update(pts) { poly.setPath(toPath(pts)); }, remove() { poly.setMap(null); } };
       },
       onMapClick(cb) { map.addListener("click", (e) => cb([e.latLng.lat(), e.latLng.lng()])); },
+      getZoom() { return map.getZoom(); },
+      onZoom(cb) { map.addListener("zoom_changed", () => cb(map.getZoom())); },
       resize() { google.maps.event.trigger(map, "resize"); },
     };
   },
@@ -221,6 +223,8 @@ const GeoMap = {
         return { update(pts) { poly.setLatLngs(pts); }, remove() { poly.remove(); } };
       },
       onMapClick(cb) { map.on("click", (e) => cb([e.latlng.lat, e.latlng.lng])); },
+      getZoom() { return map.getZoom(); },
+      onZoom(cb) { map.on("zoomend", () => cb(map.getZoom())); },
       resize() { map.invalidateSize(); },
     };
   },

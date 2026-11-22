@@ -62,6 +62,15 @@ const ICONS = {
   bellRing: LI("bell-ring"),
   bellOff: LI("bell-off"),
   verified: LI("badge-check"),
+  priceDown: LI("trending-down"),
+  message: LI("message-circle"),
+  send: LI("send-horizontal"),
+  pano: LI("rotate-3d"),
+  bellPlus: LI("bell-plus"),
+  history: LI("chart-line"),
+  back: LI("arrow-right"),
+  edit: LI("pencil"),
+  trash: LI("trash-2"),
   circle: LI("circle"),
   success: LI("circle-check"),
   error: LI("circle-alert"),
@@ -156,9 +165,10 @@ const Auth = {
     try { Store.set("aqarak_me", user); } catch (e) { /* المساحة خلصت */ }
     return user;
   },
+  // تسجيل خروج / حذف حساب: امسح كل النسخ المحفوظة في المتصفح
   forget() {
-    Store.remove("aqarak_me");
-    Store.remove("aqarak_users_cache");
+    ["aqarak_me", "aqarak_users_cache", "aqarak_favs_cache", "aqarak_notifs_cache", "aqarak_listings_cache", "aqarak_moderation_cache"]
+      .forEach((k) => Store.remove(k));
   },
   // بيسأل السيرفر مين مسجل دخول (null = مفيش جلسة). لو النت فاصل بيرجع النسخة المحفوظة.
   async refresh() {
@@ -172,10 +182,7 @@ const Auth = {
   },
   async register(payload) {
     const { user } = await Api.call("POST", "/api/auth/register", payload);
-    this.remember(user);
-    Notifs.push(user.id, "welcome");
-    Notifs.push(user.id, "prefs_tip");
-    return user;
+    return this.remember(user); // إشعارات الترحيب بيعملها السيرفر
   },
   async login(email, password) {
     const { user } = await Api.call("POST", "/api/auth/login", { email, password });
@@ -197,19 +204,16 @@ const Auth = {
   async updateMe(patch) {
     const { user } = await Api.call("PATCH", "/api/me", patch);
     this.remember(user);
-    // لما يحدد تفضيلاته، تذكير "حدد تفضيلاتك" يتشال
-    if (patch.prefs) Notifs.removeKind(user.id, "prefs_tip");
+    if (patch.prefs) Notifs.sync(); // السيرفر بيشيل تذكير "حدد تفضيلاتك"
     return user;
   },
   async changePassword(current, password) {
     const { user } = await Api.call("POST", "/api/me/password", { current, password });
-    Notifs.push(user.id, "password");
+    Notifs.sync();
     return this.remember(user);
   },
   async deleteMe() {
-    const me = this.current();
     await Api.call("DELETE", "/api/me", {});
-    if (me) this.purgeLocal(me.id);
     this.forget();
   },
   /* --- الأدمن --- */
@@ -224,18 +228,14 @@ const Auth = {
   },
   async removeUser(id) {
     await Api.call("DELETE", `/api/admin/users/${encodeURIComponent(id)}`, {});
-    this.purgeLocal(id);
-  },
-  // إعلانات ومفضلة المستخدم المحذوف (لسه محفوظة في المتصفح)
-  purgeLocal(id) {
-    Listings.user().filter((l) => l.ownerId === id).forEach((l) => Moderation.forget(l.id));
-    Store.set("aqarak_listings", Listings.user().filter((l) => l.ownerId !== id));
-    Store.remove(`aqarak_favs_${id}`);
+    Listings.sync(); // إعلاناته اتمسحت من السيرفر
   },
 };
-// الحسابات القديمة اللي كانت بتتحفظ في المتصفح بس — مش بتستخدم تاني
-Store.remove("aqarak_users");
-Store.remove("aqarak_session");
+// بيانات قديمة كانت بتتحفظ في المتصفح بس — مبقتش بتستخدم (كله بقى على السيرفر)
+try {
+  ["aqarak_users", "aqarak_session", "aqarak_listings", "aqarak_moderation"].forEach((k) => localStorage.removeItem(k));
+  Object.keys(localStorage).filter((k) => /^aqarak_notifs_u_/.test(k)).forEach((k) => localStorage.removeItem(k));
+} catch (e) { /* ignore */ }
 
 /* ---------- Profile validation (مشتركة بين التسجيل والإعدادات) ---------- */
 const MOBILE_RE = /^(?:\+?20)?0?1[0125]\d{8}$/;
@@ -285,165 +285,189 @@ function matchScore(l, prefs) {
 }
 function hasPrefs(user) { return !!(user && user.prefs); }
 
-/* ---------- Moderation (الأدمن: إخفاء / تمييز الإعلانات) ---------- */
+/* =========================================================
+   الإعلانات والمفضلة والإشعارات — محفوظة على السيرفر
+   المتصفح بيحتفظ بنسخة (cache) عشان الصفحة تفتح على طول،
+   وبعدين بتتحدّث من السيرفر. لما البيانات تتغيّر بيطلع حدث:
+     listings:changed  /  favs:changed  /  notifs:changed
+   والصفحات بتسمعه وتعيد الرسم.
+   ========================================================= */
+const emit = (name, detail) => document.dispatchEvent(new CustomEvent(name, { detail }));
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const saveCache = (key, value) => { try { Store.set(key, value); } catch (e) { /* المساحة خلصت */ } };
+
+/* ---------- Moderation (الأدمن: إخفاء / تمييز / توثيق) ---------- */
 const Moderation = {
-  get() {
-    const m = Store.get("aqarak_moderation", null) || {};
-    return { hidden: m.hidden || [], featured: m.featured || {}, verified: m.verified || {} };
+  map: Store.get("aqarak_moderation_cache", {}), // { id: { hidden, featured, verified } }
+  _flag(id, key, fallback) {
+    const m = this.map[id];
+    return m && key in m ? !!m[key] : !!fallback;
   },
-  // الإعلانات الموثّقة (الأدمن بيوثّقها من لوحة التحكم)
-  isVerified(l) {
-    const v = this.get().verified;
-    return Object.prototype.hasOwnProperty.call(v, l.id) ? !!v[l.id] : !!l.verified;
+  isHidden(id) { return this._flag(id, "hidden", false); },
+  isVerified(l) { return this._flag(l.id, "verified", l.verified); },
+  isFeatured(l) { return this._flag(l.id, "featured", l.featured); },
+  async set(id, patch) {
+    await Api.call("PATCH", `/api/admin/moderation/${encodeURIComponent(id)}`, patch);
+    this.map[id] = { ...(this.map[id] || {}), ...patch };
+    saveCache("aqarak_moderation_cache", this.map);
+    emit("listings:changed");
   },
-  setVerified(id, on) {
-    const m = this.get();
-    m.verified[id] = !!on;
-    this.save(m);
-    if (on) Notifs.toOwner(id, "verified");
-  },
-  save(m) { Store.set("aqarak_moderation", m); },
-  isHidden(id) { return this.get().hidden.includes(id); },
-  setHidden(id, on) {
-    const m = this.get();
-    m.hidden = m.hidden.filter((x) => x !== id);
-    if (on) m.hidden.push(id);
-    this.save(m);
-    Notifs.toOwner(id, on ? "hidden" : "shown");
-  },
-  isFeatured(l) {
-    const f = this.get().featured;
-    return Object.prototype.hasOwnProperty.call(f, l.id) ? !!f[l.id] : !!l.featured;
-  },
-  setFeatured(id, on) {
-    const m = this.get();
-    m.featured[id] = !!on;
-    this.save(m);
-    if (on) Notifs.toOwner(id, "featured");
-  },
-  forget(id) {
-    const m = this.get();
-    m.hidden = m.hidden.filter((x) => x !== id);
-    delete m.featured[id];
-    delete m.verified[id];
-    this.save(m);
-  },
+  setHidden(id, on) { return this.set(id, { hidden: !!on }); },
+  setFeatured(id, on) { return this.set(id, { featured: !!on }); },
+  setVerified(id, on) { return this.set(id, { verified: !!on }); },
 };
 
-/* ---------- Listings ---------- */
+/* ---------- Listings (التجريبية في data.js + الحقيقية من السيرفر) ---------- */
 const Listings = {
-  user() { return Store.get("aqarak_listings", []); },
-  everything() { return [...this.user(), ...SEED_LISTINGS]; }, // كل الإعلانات (للأدمن)
-  all() { const hidden = Moderation.get().hidden; return this.everything().filter((l) => !hidden.includes(l.id)); }, // الظاهرة للناس
+  server: Store.get("aqarak_listings_cache", []),
+  user() { return this.server; },                                     // إعلانات البروكرز الحقيقية
+  everything() { return [...this.server, ...SEED_LISTINGS]; },         // كل الإعلانات (للأدمن)
+  all() { return this.everything().filter((l) => !Moderation.isHidden(l.id)); }, // الظاهرة للناس
   get(id) { return this.everything().find((l) => l.id === id) || null; },
   isSeed(id) { return SEED_LISTINGS.some((l) => l.id === id); },
-  add(listing) {
-    const list = this.user();
-    list.unshift(listing);
-    Store.set("aqarak_listings", list);
-    Notifs.toOwner(listing.id, "published");
-    Notifs.matchAlert(listing); // بلّغ اللي العقار مناسب لتفضيلاتهم
+  byOwner(ownerId) { return this.server.filter((l) => l.ownerId === ownerId); },
+  _store() {
+    saveCache("aqarak_listings_cache", this.server);
+    emit("listings:changed");
   },
-  remove(id) { Store.set("aqarak_listings", this.user().filter((l) => l.id !== id)); Moderation.forget(id); },
-  byOwner(ownerId) { return this.user().filter((l) => l.ownerId === ownerId); },
+  async sync() {
+    try {
+      const data = await Api.call("GET", "/api/listings");
+      const changed = !same(data.listings, this.server) || !same(data.moderation, Moderation.map);
+      this.server = data.listings;
+      Moderation.map = data.moderation || {};
+      saveCache("aqarak_moderation_cache", Moderation.map);
+      if (changed) this._store();
+    } catch (e) { /* النت فاصل — خلّي النسخة المحفوظة */ }
+  },
+  async add(payload) {
+    const { listing } = await Api.call("POST", "/api/listings", payload);
+    this.server = [listing, ...this.server];
+    this._store();
+    Notifs.sync();
+    return listing;
+  },
+  async setPrice(id, price) {
+    const { listing } = await Api.call("PATCH", `/api/listings/${encodeURIComponent(id)}`, { price });
+    this.server = this.server.map((l) => (l.id === id ? listing : l));
+    this._store();
+    return listing;
+  },
+  async remove(id) {
+    await Api.call("DELETE", `/api/listings/${encodeURIComponent(id)}`, {});
+    this.server = this.server.filter((l) => l.id !== id);
+    this._store();
+  },
 };
 
-/* ---------- Favorites (لكل مستخدم) ---------- */
+/* ---------- Favorites (لكل مستخدم — على السيرفر) ---------- */
 const Favs = {
-  key() { const u = Auth.current(); return u ? `aqarak_favs_${u.id}` : null; },
-  list() { const k = this.key(); return k ? Store.get(k, []) : []; },
-  has(id) { return this.list().includes(id); },
+  ids: Store.get("aqarak_favs_cache", []),
+  list() { return this.ids; },
+  has(id) { return this.ids.includes(id); },
+  _set(ids) {
+    this.ids = ids;
+    saveCache("aqarak_favs_cache", ids);
+  },
+  async sync() {
+    const me = Auth.current();
+    if (!me) return;
+    try {
+      // المفضلة القديمة اللي كانت في المتصفح بس → تترفع على السيرفر مرة واحدة
+      const oldKey = `aqarak_favs_${me.id}`;
+      const old = Store.get(oldKey, null);
+      if (Array.isArray(old)) {
+        for (const id of old) { try { await Api.call("POST", `/api/favorites/${encodeURIComponent(id)}`, {}); } catch (e) { /* ignore */ } }
+        Store.remove(oldKey);
+      }
+      const { ids } = await Api.call("GET", "/api/favorites");
+      if (!same(ids, this.ids)) {
+        this._set(ids);
+        refreshFavButtons();
+        emit("favs:changed", { synced: true });
+      }
+    } catch (e) { /* النت فاصل */ }
+  },
+  // بيتغيّر على الشاشة على طول، ولو السيرفر رفض بيرجع زي ما كان
   toggle(id) {
-    const k = this.key();
-    if (!k) return null;
-    let list = this.list();
-    const on = !list.includes(id);
-    list = on ? [...list, id] : list.filter((x) => x !== id);
-    Store.set(k, list);
-    document.dispatchEvent(new CustomEvent("favs:changed", { detail: { id, on } }));
-    if (on) Notifs.toOwner(id, "fav"); // صاحب الإعلان يعرف إن حد حفظه
+    if (!Auth.current()) return null;
+    const on = !this.has(id);
+    this._set(on ? [...this.ids, id] : this.ids.filter((x) => x !== id));
+    emit("favs:changed", { id, on });
+    Api.call(on ? "POST" : "DELETE", `/api/favorites/${encodeURIComponent(id)}`, {}).catch((err) => {
+      this._set(on ? this.ids.filter((x) => x !== id) : [...this.ids, id]);
+      refreshFavButtons();
+      emit("favs:changed", { id, on: !on });
+      toast(t(err.message), "error");
+    });
     return on;
   },
 };
+// قلوب المفضلة الظاهرة على الشاشة تتظبط حسب المفضلة الحالية
+function refreshFavButtons() {
+  document.querySelectorAll("[data-fav]").forEach((b) => {
+    const on = Favs.has(b.dataset.fav);
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-label", t(on ? "fav_remove" : "fav_add"));
+  });
+}
 
-/* ---------- Notifications (الإشعارات) ----------
-   كل مستخدم ليه قايمة إشعارات في المتصفح: aqarak_notifs_<id>
+/* ---------- Notifications (الإشعارات — بيعملها السيرفر) ----------
    الإشعار بيتخزن كـ "نوع + بيانات" مش كنص، عشان يتعرض بالعربي أو الإنجليزي حسب اللغة.
-   في النسخة الحقيقية الإشعارات هتيجي من السيرفر (ويمكن إيميل/موبايل كمان). */
+   بيتجددوا من السيرفر كل شوية (Notifs.sync) ومعاهم عدد المحادثات اللي فيها رسايل جديدة. */
 const NOTIF_KINDS = {
-  welcome:   { icon: "house",   tone: "yellow", link: "index.html" },
-  prefs_tip: { icon: "sliders", tone: "yellow", link: "preferences.html" },
-  match:     { icon: "star",    tone: "yellow" },
-  published: { icon: "check",   tone: "green" },
-  verified:  { icon: "shield",  tone: "green" },
-  featured:  { icon: "star",    tone: "yellow" },
-  hidden:    { icon: "eyeOff",  tone: "red" },
-  shown:     { icon: "eye",     tone: "green" },
-  fav:       { icon: "heart",   tone: "red" },
-  role:      { icon: "user",    tone: "blue", link: "settings.html#profile" },
-  password:  { icon: "lock",    tone: "blue", link: "settings.html#security" },
+  welcome:      { icon: "house",     tone: "yellow", link: "index.html" },
+  prefs_tip:    { icon: "sliders",   tone: "yellow", link: "preferences.html" },
+  match:        { icon: "star",      tone: "yellow" },
+  search_match: { icon: "bellRing",  tone: "yellow", link: "properties.html" },
+  price_drop:   { icon: "priceDown", tone: "green" },
+  published:    { icon: "check",     tone: "green" },
+  verified:     { icon: "shield",    tone: "green" },
+  featured:     { icon: "star",      tone: "yellow" },
+  hidden:       { icon: "eyeOff",    tone: "red" },
+  shown:        { icon: "eye",       tone: "green" },
+  fav:          { icon: "heart",     tone: "red" },
+  role:         { icon: "user",      tone: "blue", link: "settings.html#profile" },
+  password:     { icon: "lock",      tone: "blue", link: "settings.html#security" },
 };
 const Notifs = {
-  key(userId) { return `aqarak_notifs_${userId}`; },
-  list(userId) {
-    const id = userId || (Auth.current() || {}).id;
-    return id ? Store.get(this.key(id), []) : [];
+  data: Store.get("aqarak_notifs_cache", null) || { list: [], unread: 0, chats: 0 },
+  list() { return this.data.list; },
+  unread() { return this.data.unread; },
+  chatsUnread() { return this.data.chats; },
+  _set(data) {
+    const changed = !same(data, this.data);
+    this.data = data;
+    saveCache("aqarak_notifs_cache", data);
+    if (changed) emit("notifs:changed");
   },
-  save(userId, list) {
-    try { Store.set(this.key(userId), list.slice(0, 50)); } catch (e) { /* المساحة خلصت */ }
-    if (Auth.current() && Auth.current().id === userId) document.dispatchEvent(new CustomEvent("notifs:changed"));
+  async sync() {
+    if (!Auth.current()) return;
+    try {
+      const d = await Api.call("GET", "/api/notifications");
+      this._set({ list: d.notifications, unread: d.unread, chats: d.chatsUnread });
+    } catch (e) { /* النت فاصل */ }
   },
-  push(userId, kind, vars = {}, listingId = null) {
-    if (!userId || !NOTIF_KINDS[kind]) return;
-    const list = this.list(userId);
-    list.unshift({ id: uid("n"), kind, vars, listingId, createdAt: new Date().toISOString(), read: false });
-    this.save(userId, list);
-  },
-  // إشعار لصاحب الإعلان (لو الإعلان بتاع مستخدم مش تجريبي)
-  toOwner(listingId, kind) {
-    const l = Listings.get(listingId);
-    if (!l || !l.ownerId) return;
-    const me = Auth.current();
-    if (kind === "fav" && me && me.id === l.ownerId) return; // مش هنبلغه إنه حفظ إعلانه بنفسه
-    this.push(l.ownerId, kind, { title: l.title }, l.id);
-  },
-  // عقار جديد → بلّغ كل اللي تفضيلاتهم مطابقة
-  matchAlert(l) {
-    Auth.users().forEach((u) => {
-      if (u.id === l.ownerId || !u.prefs) return;
-      if (matchScore(l, u.prefs) >= 0.75) this.push(u.id, "match", { title: l.title, area: l.city, price: l.price, purpose: l.purpose }, l.id);
-    });
-  },
-  unread() { return this.list().filter((n) => !n.read).length; },
   markRead(id) {
-    const me = Auth.current(); if (!me) return;
-    const list = this.list(me.id);
-    const n = list.find((x) => x.id === id);
-    if (n && !n.read) { n.read = true; this.save(me.id, list); }
+    const n = this.data.list.find((x) => x.id === id);
+    if (!n || n.read) return;
+    this._set({ ...this.data, list: this.data.list.map((x) => (x.id === id ? { ...x, read: true } : x)), unread: Math.max(0, this.data.unread - 1) });
+    Api.call("POST", "/api/notifications/read", { id }).catch(() => {});
   },
   markAllRead() {
-    const me = Auth.current(); if (!me) return;
-    this.save(me.id, this.list(me.id).map((n) => ({ ...n, read: true })));
-  },
-  removeKind(userId, kind) {
-    const list = this.list(userId);
-    if (list.some((n) => n.kind === kind)) this.save(userId, list.filter((n) => n.kind !== kind));
-  },
-  // للحسابات القديمة اللي اتعملت قبل الإشعارات
-  ensureWelcome(user) {
-    if (!user) return;
-    try { if (localStorage.getItem(this.key(user.id)) !== null) return; } catch (e) { return; }
-    this.save(user.id, []);
-    this.push(user.id, "welcome");
-    if (!user.prefs) this.push(user.id, "prefs_tip");
+    this._set({ ...this.data, list: this.data.list.map((x) => ({ ...x, read: true })), unread: 0 });
+    Api.call("POST", "/api/notifications/read", {}).catch(() => {});
   },
   // نص الإشعار باللغة الحالية
   text(n) {
     const v = n.vars || {};
+    const per = v.purpose === "rent" ? ` ${t("per_month")}` : "";
     const vars = {
       title: loc(v.title) || "",
       area: v.area ? cityName(v.area) : "",
-      price: v.price ? `${fmtPrice(v.price)}${v.purpose === "rent" ? ` ${t("per_month")}` : ""}` : "",
+      price: v.price ? `${fmtPrice(v.price)}${per}` : "",
+      old: v.old ? `${fmtPrice(v.old)}${per}` : "",
+      name: v.name || "",
       role: v.role ? roleName(v.role) : "",
     };
     return { title: t(`notif_${n.kind}_t`, vars), body: t(`notif_${n.kind}_b`, vars) };
@@ -537,7 +561,8 @@ function updateFavBadge(animate) {
     link.classList.add("bump");
   }
 }
-document.addEventListener("favs:changed", () => updateFavBadge(true));
+document.addEventListener("favs:changed", (e) => updateFavBadge(!(e.detail && e.detail.synced)));
+document.addEventListener("listings:changed", () => updateFavBadge(false));
 
 /* ---------- جرس الإشعارات في الهيدر ---------- */
 function updateNotifBadge(animate) {
@@ -614,11 +639,26 @@ document.addEventListener("notifs:changed", () => {
   const menu = document.getElementById("notifMenu");
   if (menu && menu.classList.contains("open")) renderNotifPanel();
 });
-// لو الإشعار وصل من تاب تاني (مثلاً الأدمن وثّق إعلانك في تاب تاني)
+// لو الإشعارات اتحدّثت من تاب تاني
 window.addEventListener("storage", (e) => {
-  const me = Auth.current();
-  if (me && e.key === Notifs.key(me.id)) document.dispatchEvent(new CustomEvent("notifs:changed"));
+  if (e.key === "aqarak_notifs_cache") {
+    Notifs.data = Store.get("aqarak_notifs_cache", null) || { list: [], unread: 0, chats: 0 };
+    emit("notifs:changed");
+  }
 });
+
+/* ---------- أيقونة الرسايل في الهيدر (عدد المحادثات اللي فيها رسايل جديدة) ---------- */
+function updateChatBadge() {
+  const link = document.getElementById("chatLink");
+  if (!link) return;
+  const n = Notifs.chatsUnread();
+  const badge = document.getElementById("chatCount");
+  badge.textContent = n > 99 ? "99+" : n;
+  badge.classList.toggle("hidden", !n);
+  link.classList.toggle("has-unread", n > 0);
+  link.setAttribute("aria-label", `${t("messages")}${n ? ` (${n})` : ""}`);
+}
+document.addEventListener("notifs:changed", updateChatBadge);
 
 document.addEventListener("click", (e) => {
   const menu = document.getElementById("notifMenu");
@@ -671,9 +711,14 @@ function renderHeader() {
       : `<span class="avatar">${initial}</span>`;
     const canSell = user.role === "broker" || user.role === "admin";
     const favN = favCount();
-    Notifs.ensureWelcome(user);
     const unread = Notifs.unread();
+    const chatsN = Notifs.chatsUnread();
     actions = `
+      <a href="messages.html" class="fav-link chat-link${chatsN ? " has-unread" : ""} ${page === "messages" ? "active" : ""}" id="chatLink"
+         aria-label="${esc(t("messages"))}${chatsN ? ` (${chatsN})` : ""}" title="${esc(t("messages"))}">
+        ${ICONS.message}
+        <span class="notif-count${chatsN ? "" : " hidden"}" id="chatCount">${chatsN > 99 ? "99+" : chatsN}</span>
+      </a>
       <div class="notif-menu" id="notifMenu">
         <button type="button" class="fav-link notif-btn" id="notifBtn" aria-haspopup="true" aria-expanded="false"
                 aria-label="${esc(t("notifs"))}${unread ? ` (${unread})` : ""}" title="${esc(t("notifs"))}">
@@ -699,6 +744,7 @@ function renderHeader() {
           </div>
           ${user.role === "admin" ? `<a href="admin.html">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>` : ""}
           ${canSell ? `<a href="sell.html#mine">${ICONS.list}<span>${esc(t("my_listings"))}</span></a>` : ""}
+          <a href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>
           <a href="properties.html?favs=1">${ICONS.heart}<span>${esc(t("my_favs"))}</span></a>
           <a href="settings.html#prefs">${ICONS.sliders}<span>${esc(t("tab_prefs"))}</span></a>
           <a href="settings.html#profile">${ICONS.gear}<span>${esc(t("nav_settings"))}</span></a>
@@ -802,6 +848,7 @@ function propCard(l) {
         ${Moderation.isVerified(l) ? `<span class="verified-badge">${ICONS.verified}${esc(t("verified"))}</span>` : ""}
         <button class="fav-btn ${fav ? "on" : ""}" type="button" data-fav="${esc(l.id)}"
                 aria-label="${esc(t(fav ? "fav_remove" : "fav_add"))}">${ICONS.heart}</button>
+        ${l.pano ? `<span class="pano-chip" title="${esc(t("pano_has"))}">${ICONS.pano}<bdi dir="ltr">360°</bdi></span>` : ""}
         ${showYield ? `<span class="yield-chip">${esc(t("yield_chip", { v: l.yield }))}</span>` : ""}
         ${hasPrefs(user) && matchScore(l, user.prefs) >= 0.75 ? `<span class="match-chip">${ICONS.star}${esc(t("match_chip"))}</span>` : ""}
       </div>
@@ -873,11 +920,13 @@ function openDetails(id) {
   const isInvestor = user && (user.role === "investor" || user.role === "admin");
   const coords = listingCoords(l);
 
+  const panoBtn = l.pano
+    ? `<button type="button" class="pano-btn" data-open-pano>${ICONS.pano}<span>${esc(t("pano_open"))}</span></button>` : "";
   const gallery = images.length
-    ? `<div class="gallery-main"><img id="galleryMain" src="${esc(images[0])}" alt="" onerror="imgFail(this)"></div>
+    ? `<div class="gallery-main"><img id="galleryMain" src="${esc(images[0])}" alt="" onerror="imgFail(this)">${panoBtn}</div>
        ${images.length > 1 ? `<div class="gallery-thumbs">${images.map((src, i) =>
           `<img src="${esc(src)}" data-src="${esc(src)}" class="${i === 0 ? "active" : ""}" alt="" onerror="this.remove()">`).join("")}</div>` : ""}`
-    : `<div class="gallery-main"><div class="img-fallback">${ICONS.house}</div></div>`;
+    : `<div class="gallery-main"><div class="img-fallback">${ICONS.house}</div>${panoBtn}</div>`;
 
   let investBox = "";
   if (isInvestor && l.purpose === "sale" && l.yield) {
@@ -893,12 +942,17 @@ function openDetails(id) {
   if (user) {
     const phone = String(l.phone || "").replace(/\D/g, "");
     const wa = phone.startsWith("0") ? `2${phone}` : phone;
+    // محادثة داخل الموقع: للإعلانات الحقيقية بس (التجريبية مالهاش صاحب حقيقي)
+    let chatBtn = "";
+    if (Listings.isSeed(l.id)) chatBtn = `<small class="chat-note">${ICONS.message}${esc(t("chat_demo_note"))}</small>`;
+    else if (l.ownerId !== user.id) chatBtn = `<button type="button" class="btn btn-outline btn-block" data-start-chat>${ICONS.message}${esc(t("chat_start"))}</button>`;
     contact = `
       <div class="owner"><span class="avatar">${esc((l.owner || "?").charAt(0))}</span>
         <div><small>${esc(t("listed_by"))}</small>${esc(l.owner || t("owner"))}</div></div>
       <div style="font-weight:800;font-size:18px;direction:ltr;text-align:center">${esc(l.phone || "")}</div>
       <a class="btn btn-primary btn-block" href="tel:${esc(phone)}">${ICONS.phone}${esc(t("call"))}</a>
-      <a class="btn btn-whatsapp btn-block" href="https://wa.me/${esc(wa)}" target="_blank" rel="noopener">${icon("whatsapp", "font-size:19px")}${esc(t("whatsapp"))}</a>`;
+      <a class="btn btn-whatsapp btn-block" href="https://wa.me/${esc(wa)}" target="_blank" rel="noopener">${icon("whatsapp", "font-size:19px")}${esc(t("whatsapp"))}</a>
+      ${chatBtn}`;
   } else {
     contact = `
       <div style="text-align:center;color:var(--muted);font-weight:600">${icon("lock", "font-size:28px;display:block;margin:0 auto 8px;color:var(--yellow-dark)")}${esc(t("login_to_contact"))}</div>
@@ -928,6 +982,7 @@ function openDetails(id) {
           ${investBox}
           <h3 style="margin:0 0 6px">${esc(t("description"))}</h3>
           <p style="margin:0;color:var(--ink-2);white-space:pre-line">${esc(loc(l.desc))}</p>
+          ${priceHistoryHTML(l)}
           ${coords ? `
           <h3 style="margin:22px 0 8px">${icon("map", "color:var(--yellow-dark)")} ${esc(t("location_title"))}</h3>
           <div class="detail-map">
@@ -962,6 +1017,170 @@ function openDetails(id) {
     if (on === null) return;
     favBtn.classList.toggle("on", on);
     favBtn.querySelector("span").textContent = t(on ? "fav_remove" : "fav_add");
+  });
+  const panoOpen = el.querySelector("[data-open-pano]");
+  if (panoOpen) panoOpen.addEventListener("click", () => openPano(l.pano, loc(l.title)));
+  const chatStart = el.querySelector("[data-start-chat]");
+  if (chatStart) chatStart.addEventListener("click", async () => {
+    chatStart.disabled = true;
+    try {
+      const { chat } = await Api.call("POST", "/api/chats", { listingId: l.id });
+      location.href = `messages.html?c=${encodeURIComponent(chat.id)}`;
+    } catch (err) {
+      chatStart.disabled = false;
+      toast(t(err.message), "error");
+    }
+  });
+  bindPriceChart(el);
+}
+
+/* ---------- جولة 360° (Pannellum — مكتبة مجانية مفتوحة المصدر) ---------- */
+let pannellumReady = null;
+function loadPannellum() {
+  if (!pannellumReady) {
+    loadCssOnce("https://cdnjs.cloudflare.com/ajax/libs/pannellum/2.5.6/pannellum.css");
+    pannellumReady = loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/pannellum/2.5.6/pannellum.js")
+      .catch((e) => { pannellumReady = null; throw e; });
+  }
+  return pannellumReady;
+}
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.async = true;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error("err_network"));
+    document.head.appendChild(s);
+  });
+}
+function loadCssOnce(href) {
+  if (document.querySelector(`link[href="${href}"]`)) return;
+  const l = document.createElement("link");
+  l.rel = "stylesheet";
+  l.href = href;
+  document.head.appendChild(l);
+}
+async function openPano(src, title = "") {
+  const { el, close } = openModal(`
+    <div class="pano-wrap">
+      <div class="pano-head">${ICONS.pano}<strong>${esc(t("pano_title"))}</strong>${title ? `<span>${esc(title)}</span>` : ""}</div>
+      <div class="pano-view" id="panoView" dir="ltr"><div class="map-loading">${esc(t("pano_loading"))}</div></div>
+      <small class="pano-hint">${esc(t("pano_hint"))}</small>
+    </div>`, { size: "lg" });
+  el.classList.add("modal-pano");
+  try {
+    await loadPannellum();
+    const host = el.querySelector("#panoView");
+    if (!host) return;
+    host.innerHTML = "";
+    window.pannellum.viewer(host, {
+      type: "equirectangular",
+      panorama: src,
+      autoLoad: true,
+      autoRotate: -2,
+      autoRotateInactivityDelay: 4000,
+      showZoomCtrl: true,
+      showFullscreenCtrl: true,
+      compass: false,
+      hfov: 105,
+      strings: { loadingLabel: t("pano_loading"), loadButtonLabel: t("pano_open") },
+    });
+  } catch (e) {
+    const host = el.querySelector("#panoView");
+    if (host) host.innerHTML = `<div class="map-loading">${esc(t("pano_error"))}</div>`;
+    else close();
+  }
+}
+
+/* ---------- سجل السعر (رسم بياني بسيط SVG) ---------- */
+function priceHistoryHTML(l) {
+  const pts = (l.priceHistory || []).filter((p) => p && p.price && p.at);
+  if (!pts.length) return "";
+  const per = l.purpose === "rent" ? ` ${t("per_month")}` : "";
+  const locale = Lang.get() === "ar" ? "ar-EG-u-nu-latn" : "en-US"; // أرقام عادية زي الأسعار
+  const fmtDate = (iso, opts = { month: "short", year: "numeric" }) => new Date(iso).toLocaleDateString(locale, opts);
+  const first = pts[0].price;
+  const last = pts[pts.length - 1].price;
+  const pct = first ? Math.round(((last - first) / first) * 1000) / 10 : 0;
+  const trend = pts.length < 2 || pct === 0
+    ? `<span class="ph-trend flat">${esc(t("hist_flat"))}</span>`
+    : `<span class="ph-trend ${pct < 0 ? "down" : "up"}">${pct < 0 ? ICONS.priceDown : ICONS.chart}${esc(t(pct < 0 ? "hist_down" : "hist_up", { v: Math.abs(pct) }))}</span>`;
+
+  // الرسم: محور الوقت أفقي، السعر رأسي
+  const W = 560; const H = 170; const padL = 12; const padR = 12; const padT = 18; const padB = 30;
+  const times = pts.map((p) => new Date(p.at).getTime());
+  const t0 = Math.min(...times); const t1 = Math.max(...times);
+  const prices = pts.map((p) => p.price);
+  let lo = Math.min(...prices); let hi = Math.max(...prices);
+  if (lo === hi) { lo *= 0.95; hi *= 1.05; }
+  const span = hi - lo; lo -= span * 0.15; hi += span * 0.15;
+  const x = (tm) => (t1 === t0 ? W / 2 : padL + ((tm - t0) / (t1 - t0)) * (W - padL - padR));
+  const y = (p) => padT + (1 - (p - lo) / (hi - lo)) * (H - padT - padB);
+  // خط متدرّج (السعر بيفضل ثابت لحد التغيير الجاي)
+  let d = "";
+  pts.forEach((p, i) => {
+    const px = x(times[i]); const py = y(p.price);
+    if (i === 0) d += `M${px.toFixed(1)},${py.toFixed(1)}`;
+    else d += ` H${px.toFixed(1)} V${py.toFixed(1)}`;
+  });
+  const lastX = x(times[times.length - 1]);
+  const area = `${d} V${H - padB} H${x(times[0]).toFixed(1)} Z`;
+  const dots = pts.map((p, i) => `
+    <circle class="ph-dot${i === pts.length - 1 ? " last" : ""}" cx="${x(times[i]).toFixed(1)}" cy="${y(p.price).toFixed(1)}" r="${i === pts.length - 1 ? 5.5 : 4}"
+      tabindex="0" data-ph="${i}"><title>${esc(fmtDate(p.at, { day: "numeric", month: "short", year: "numeric" }))}: ${esc(fmtPrice(p.price) + per)}</title></circle>`).join("");
+  const labels = pts.length > 1
+    ? `<text x="${x(times[0]).toFixed(1)}" y="${H - 8}" text-anchor="start" class="ph-axis">${esc(fmtDate(pts[0].at))}</text>
+       <text x="${lastX.toFixed(1)}" y="${H - 8}" text-anchor="end" class="ph-axis">${esc(fmtDate(pts[pts.length - 1].at))}</text>` : "";
+
+  const rows = [...pts].reverse().map((p, i, arr) => {
+    const prev = arr[i + 1];
+    const diff = prev ? p.price - prev.price : 0;
+    const chip = !prev ? `<span class="ph-chip">${esc(t("hist_listed"))}</span>`
+      : `<span class="ph-chip ${diff < 0 ? "down" : "up"}">${diff < 0 ? "−" : "+"}${esc(fmtNum(Math.abs(diff)))}</span>`;
+    return `<li><span>${esc(fmtDate(p.at, { day: "numeric", month: "short", year: "numeric" }))}</span><strong>${esc(fmtPrice(p.price))}</strong>${chip}</li>`;
+  }).join("");
+
+  return `
+    <section class="price-history">
+      <div class="ph-head">
+        <h3>${ICONS.history} ${esc(t("hist_title"))}</h3>
+        ${trend}
+      </div>
+      ${pts.length > 1 ? `
+      <div class="ph-chart">
+        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t("hist_title"))}" direction="ltr" style="direction:ltr">
+          <line x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}" class="ph-base"/>
+          <path d="${area}" class="ph-area"/>
+          <path d="${d}" class="ph-line"/>
+          ${dots}
+          ${labels}
+        </svg>
+        <div class="ph-tip hidden" aria-hidden="true"></div>
+      </div>` : `<p class="hint" style="margin:0 0 8px">${esc(t("hist_single"))}</p>`}
+      <ul class="ph-list">${rows}</ul>
+    </section>`;
+}
+// لما الماوس يقف على نقطة: يظهر التاريخ والسعر
+function bindPriceChart(root) {
+  const chart = root.querySelector(".ph-chart");
+  if (!chart) return;
+  const tip = chart.querySelector(".ph-tip");
+  const show = (dot) => {
+    const title = dot.querySelector("title");
+    if (!title) return;
+    tip.textContent = title.textContent;
+    const box = chart.getBoundingClientRect();
+    const r = dot.getBoundingClientRect();
+    tip.style.left = `${r.left + r.width / 2 - box.left}px`;
+    tip.style.top = `${r.top - box.top}px`;
+    tip.classList.remove("hidden");
+  };
+  chart.querySelectorAll(".ph-dot").forEach((dot) => {
+    dot.addEventListener("mouseenter", () => show(dot));
+    dot.addEventListener("focus", () => show(dot));
+    dot.addEventListener("mouseleave", () => tip.classList.add("hidden"));
+    dot.addEventListener("blur", () => tip.classList.add("hidden"));
   });
 }
 
@@ -1039,6 +1258,17 @@ document.addEventListener("DOMContentLoaded", () => {
 // التأكد من الجلسة مع السيرفر في كل صفحة (لو اتقفلت، أو الباسورد اتغيّر، أو الأدمن حذف الحساب)
 if (!window.__aqarakRedirecting && document.body.dataset.page !== "auth") {
   const before = JSON.stringify(Auth.current());
+  // الإعلانات والمفضلة والإشعارات من السيرفر (الصفحة اتعرضت من النسخة المحفوظة لحد ما يردوا)
+  if (Auth.current()) {
+    Listings.sync();
+    Favs.sync();
+    Notifs.sync();
+    // الإشعارات والرسايل الجديدة كل 45 ثانية (والتاب مفتوح بس)، والإعلانات لما ترجع للتاب
+    setInterval(() => { if (!document.hidden) Notifs.sync(); }, 45000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) { Notifs.sync(); Listings.sync(); }
+    });
+  }
   Auth.refresh().then((user) => {
     if (!user) {
       const here = location.pathname.split("/").pop() || "index.html";

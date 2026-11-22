@@ -41,12 +41,19 @@
       el.type = "button";
       el.className = `map-price ${l.purpose}`;
       el.innerHTML = `${ICONS[TYPE_ICON[l.type]] || ICONS.house}<span>${esc(fmtShortPrice(l.price))}</span>`;
-      el.title = loc(l.title);
+      el.title = `${loc(l.title)} — ${fmtShortPrice(l.price)}`;
       if (state.shape && !inside(l)) el.classList.add("dim");
       const marker = map.addMarker(lat, lng, el, () => selectListing(l.id, true));
       markers.set(l.id, { marker, el });
     });
     highlight(state.activeId);
+    updateCompact();
+  }
+
+  // عقارات كتير والخريطة بعيدة → نقط صغيرة بدل الأسعار (عشان ميركبوش على بعض)
+  function updateCompact() {
+    if (!map) return;
+    $("map").classList.toggle("map-compact", map.getZoom() < 16 && markers.size > 30);
   }
 
   function highlight(id) {
@@ -152,7 +159,8 @@
   });
   $("typeSel").addEventListener("change", (e) => { state.type = e.target.value; renderAll(); });
 
-  // لو المستخدم أضاف/شال من المفضلة من نافذة التفاصيل مفيش حاجة تتغير هنا
+  // إعلانات جديدة وصلت من السيرفر
+  document.addEventListener("listings:changed", () => { if (map) renderAll(); else renderList(); });
 
   /* --- Init --- */
   renderList();
@@ -162,6 +170,7 @@
       $("map").querySelector(".map-loading")?.remove();
       $("osmNote").classList.toggle("hidden", m.engine !== "osm");
       renderAll();
+      map.onZoom(updateCompact);
       const focus = focusId && Listings.get(focusId);
       if (focus && listingCoords(focus)) {
         map.setView(listingCoords(focus), 16);

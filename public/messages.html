@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>عقارك</title>
+  <script>try{var l=localStorage.getItem("aqarak_lang")==="en"?"en":"ar";document.documentElement.lang=l;document.documentElement.dir=l==="ar"?"rtl":"ltr";}catch(e){}</script>
+  <script src="js/guard.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.469.0/font/lucide.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="messages" data-title="page_messages">
+
+  <div id="site-header"></div>
+
+  <main class="container chat-page">
+    <div class="chat-shell" id="chatShell">
+      <!-- قايمة المحادثات -->
+      <aside class="chat-list">
+        <div class="chat-list-head">
+          <h1 data-i18n="messages"></h1>
+        </div>
+        <div class="chat-items" id="chatItems"></div>
+      </aside>
+
+      <!-- المحادثة المفتوحة -->
+      <section class="chat-thread" id="chatThread">
+        <div class="chat-empty" id="chatEmpty"></div>
+        <div class="chat-open hidden" id="chatOpen">
+          <header class="chat-head">
+            <button type="button" class="chat-back" id="chatBack"></button>
+            <span class="avatar" id="chatAvatar"></span>
+            <div class="chat-who">
+              <strong id="chatName"></strong>
+              <button type="button" class="chat-listing" id="chatListing"></button>
+            </div>
+          </header>
+          <div class="chat-msgs" id="chatMsgs" aria-live="polite"></div>
+          <form class="chat-compose" id="chatForm" autocomplete="off">
+            <textarea class="input" id="chatInput" rows="1" maxlength="2000" data-i18n-ph="chat_ph"></textarea>
+            <button type="submit" class="btn btn-primary chat-send" id="chatSend"></button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/chat.js"></script>
+</body>
+</html>
