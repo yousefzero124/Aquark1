@@ -1,0 +1,14 @@
+# حاجات بتفضل على جهازك ومش بتترفع على GitHub
+tools/
+.claude/
+*.bat
+*.log
+Thumbs.db
+desktop.ini
+
+# حسابات التجربة على جهازك + أسرار + مكتبات
+data/
+node_modules/
+.env
+.env.*
+.vercel/

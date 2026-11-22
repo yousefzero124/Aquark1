@@ -63,7 +63,10 @@
         mode: "wizard",
         role: user.role,
         initial: user.prefs,
-        onSave(prefs) { Auth.updateUser(user.id, { prefs }); done("prefs_saved"); },
+        async onSave(prefs) {
+          try { await Auth.updateMe({ prefs }); done("prefs_saved"); }
+          catch (err) { toast(t(err.message)); }
+        },
         onSkip() { done(); },
       });
     })();

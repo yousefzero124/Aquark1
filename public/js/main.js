@@ -117,111 +117,125 @@ const Store = {
   remove(key) { try { localStorage.removeItem(key); } catch (e) { /* ignore */ } },
 };
 
-/* ---------- Accounts ----------
-   ملحوظة مهمة: ده نظام حسابات تجريبي بيتخزن في المتصفح بس.
-   للنسخة الحقيقية لازم سيرفر وقاعدة بيانات (هنعملها في مرحلة جاية). */
-const Auth = {
-  users() { return Store.get("aqarak_users", []); },
-  saveUsers(list) { Store.set("aqarak_users", list); },
-  current() {
-    const s = Store.get("aqarak_session", null);
-    if (!s) return null;
-    return this.users().find((u) => u.id === s.userId) || null;
-  },
-  startSession(user) { Store.set("aqarak_session", { userId: user.id }); },
-  logout() { Store.remove("aqarak_session"); },
-  findByEmail(email) {
-    const e = String(email || "").trim().toLowerCase();
-    return this.users().find((u) => u.email === e) || null;
-  },
-  async hash(email, password) {
-    const text = `aqarak:${email}:${password}`;
-    if (window.crypto && crypto.subtle) {
-      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-      return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+/* ---------- السيرفر (API) ----------
+   كل طلب بيرجع JSON. لو فيه خطأ بيرمي Error رسالته مفتاح ترجمة (err_...). */
+const Api = {
+  async call(method, path, body) {
+    const opts = { method, credentials: "same-origin", headers: {} };
+    if (body !== undefined) {
+      opts.headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(body);
     }
-    let h = 5381;
-    for (let i = 0; i < text.length; i++) h = ((h << 5) + h) ^ text.charCodeAt(i);
-    return `x${(h >>> 0).toString(16)}`;
+    let res;
+    try { res = await fetch(path, opts); } catch (e) { throw new Error("err_network"); }
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* مش JSON */ }
+    if (!res.ok) {
+      if (res.status === 401 && data.error === "err_session") Auth.forget();
+      throw new Error(data.error || (res.status === 404 ? "err_no_server" : "err_server"));
+    }
+    return data;
   },
+};
+
+/* ---------- Accounts ----------
+   الحسابات محفوظة على السيرفر (قاعدة البيانات). الجلسة كوكي httpOnly
+   والمتصفح بيحتفظ بنسخة من بيانات المستخدم (aqarak_me) عشان الصفحات تفتح بسرعة،
+   وبتتحدّث من السيرفر مع كل فتحة صفحة (Auth.refresh). */
+const Auth = {
   ROLES: ["buyer", "investor", "broker", "admin"],
-  checkAdminCode(code) {
-    const expected = (window.AQARAK_CONFIG && AQARAK_CONFIG.ADMIN_INVITE_CODE) || "";
-    return !!expected && String(code || "").trim() === expected;
+  current() { return Store.get("aqarak_me", null); },
+  // الأدمن بس بيشوف كل الحسابات (بتتحمّل بـ loadUsers) — غير كده: المستخدم الحالي بس
+  users() {
+    const me = this.current();
+    const list = me && me.role === "admin" ? Store.get("aqarak_users_cache", []) : [];
+    if (me && !list.some((u) => u.id === me.id)) list.push(me);
+    return list;
   },
-  async register({ name, email, password, role, provider = "password", picture = "", adminCode = "", profile = {} }) {
-    const e = email.trim().toLowerCase();
-    if (this.findByEmail(e)) throw new Error("err_exists");
-    if (!this.ROLES.includes(role)) throw new Error("err_role");
-    if (role === "admin" && !this.checkAdminCode(adminCode)) throw new Error("err_admin_code");
-    const user = {
-      id: uid("u"),
-      name: name.trim(),
-      email: e,
-      role,
-      provider,
-      picture,
-      phone: profile.phone || "",
-      age: profile.age || null,
-      gender: profile.gender || "",
-      city: profile.city || "",
-      address: profile.address || "",
-      prefs: null,
-      passHash: password ? await this.hash(e, password) : null,
-      createdAt: new Date().toISOString(),
-    };
-    const list = this.users();
-    list.push(user);
-    this.saveUsers(list);
-    this.startSession(user);
+  remember(user) {
+    try { Store.set("aqarak_me", user); } catch (e) { /* المساحة خلصت */ }
+    return user;
+  },
+  forget() {
+    Store.remove("aqarak_me");
+    Store.remove("aqarak_users_cache");
+  },
+  // بيسأل السيرفر مين مسجل دخول (null = مفيش جلسة). لو النت فاصل بيرجع النسخة المحفوظة.
+  async refresh() {
+    try {
+      const { user } = await Api.call("GET", "/api/auth/me");
+      if (user) this.remember(user); else this.forget();
+      return user;
+    } catch (e) {
+      return this.current();
+    }
+  },
+  async register(payload) {
+    const { user } = await Api.call("POST", "/api/auth/register", payload);
+    this.remember(user);
     Notifs.push(user.id, "welcome");
     Notifs.push(user.id, "prefs_tip");
     return user;
   },
   async login(email, password) {
-    const user = this.findByEmail(email);
-    if (!user) throw new Error("err_login");
-    if (!user.passHash) throw new Error("err_google_only");
-    if (user.passHash !== (await this.hash(user.email, password))) throw new Error("err_login");
-    this.startSession(user);
-    return user;
+    const { user } = await Api.call("POST", "/api/auth/login", { email, password });
+    return this.remember(user);
   },
-  async resetPassword(email, newPassword) {
-    const list = this.users();
-    const user = list.find((u) => u.email === email.trim().toLowerCase());
-    if (!user) throw new Error("err_no_user");
-    user.passHash = await this.hash(user.email, newPassword);
-    this.saveUsers(list);
-    Notifs.push(user.id, "password");
+  // Google: يا إما بيدخل على طول ({user}) يا إما حساب جديد ({needsSignup, profile})
+  async google(credential) {
+    const data = await Api.call("POST", "/api/auth/google", { credential });
+    if (data.user) this.remember(data.user);
+    return data;
   },
-  updateUser(id, patch) {
-    const list = this.users();
-    const user = list.find((u) => u.id === id);
-    if (user) { Object.assign(user, patch); this.saveUsers(list); }
+  async logout() {
+    try { await Api.call("POST", "/api/auth/logout", {}); } catch (e) { /* حتى لو فشل، امسح الجلسة من هنا */ }
+    this.forget();
+  },
+  forgot(email) { return Api.call("POST", "/api/auth/forgot", { email }); },
+  reset(email, code, password) { return Api.call("POST", "/api/auth/reset", { email, code, password }); },
+  // تعديل بيانات المستخدم الحالي (الاسم، الموبايل، التفضيلات، الصورة...)
+  async updateMe(patch) {
+    const { user } = await Api.call("PATCH", "/api/me", patch);
+    this.remember(user);
     // لما يحدد تفضيلاته، تذكير "حدد تفضيلاتك" يتشال
-    if (user && patch.prefs) Notifs.removeKind(id, "prefs_tip");
+    if (patch.prefs) Notifs.removeKind(user.id, "prefs_tip");
     return user;
   },
-  async checkPassword(user, password) {
-    return !!user.passHash && user.passHash === (await this.hash(user.email, password));
+  async changePassword(current, password) {
+    const { user } = await Api.call("POST", "/api/me/password", { current, password });
+    Notifs.push(user.id, "password");
+    return this.remember(user);
   },
-  async setPassword(id, password) {
-    const user = this.users().find((u) => u.id === id);
-    if (user) this.updateUser(id, { passHash: await this.hash(user.email, password) });
+  async deleteMe() {
+    const me = this.current();
+    await Api.call("DELETE", "/api/me", {});
+    if (me) this.purgeLocal(me.id);
+    this.forget();
   },
-  // حذف مستخدم وإعلاناته ومفضلته (بيستخدمها الأدمن)
-  removeUser(id) {
+  /* --- الأدمن --- */
+  async loadUsers() {
+    const { users } = await Api.call("GET", "/api/admin/users");
+    try { Store.set("aqarak_users_cache", users); } catch (e) { /* ignore */ }
+    return users;
+  },
+  async setRole(id, role) {
+    const { user } = await Api.call("PATCH", `/api/admin/users/${encodeURIComponent(id)}`, { role });
+    return user;
+  },
+  async removeUser(id) {
+    await Api.call("DELETE", `/api/admin/users/${encodeURIComponent(id)}`, {});
+    this.purgeLocal(id);
+  },
+  // إعلانات ومفضلة المستخدم المحذوف (لسه محفوظة في المتصفح)
+  purgeLocal(id) {
     Listings.user().filter((l) => l.ownerId === id).forEach((l) => Moderation.forget(l.id));
-    this.saveUsers(this.users().filter((u) => u.id !== id));
     Store.set("aqarak_listings", Listings.user().filter((l) => l.ownerId !== id));
     Store.remove(`aqarak_favs_${id}`);
   },
-  // المستخدم بيحذف حسابه بنفسه
-  deleteUser(id) {
-    this.removeUser(id);
-    this.logout();
-  },
 };
+// الحسابات القديمة اللي كانت بتتحفظ في المتصفح بس — مش بتستخدم تاني
+Store.remove("aqarak_users");
+Store.remove("aqarak_session");
 
 /* ---------- Profile validation (مشتركة بين التسجيل والإعدادات) ---------- */
 const MOBILE_RE = /^(?:\+?20)?0?1[0125]\d{8}$/;
@@ -976,9 +990,11 @@ document.addEventListener("click", (e) => {
     if (a === "lang") Lang.toggle();
     if (a === "menu") document.getElementById("mainNav").classList.toggle("open");
     if (a === "logout") {
-      Auth.logout();
-      sessionStorage.setItem("aqarak_flash", t("logged_out"));
-      location.href = "index.html";
+      action.disabled = true;
+      Auth.logout().then(() => {
+        sessionStorage.setItem("aqarak_flash", t("logged_out"));
+        location.href = "index.html";
+      });
     }
     return;
   }
@@ -1019,6 +1035,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
   targets.forEach((el) => io.observe(el));
 });
+
+// التأكد من الجلسة مع السيرفر في كل صفحة (لو اتقفلت، أو الباسورد اتغيّر، أو الأدمن حذف الحساب)
+if (!window.__aqarakRedirecting && document.body.dataset.page !== "auth") {
+  const before = JSON.stringify(Auth.current());
+  Auth.refresh().then((user) => {
+    if (!user) {
+      const here = location.pathname.split("/").pop() || "index.html";
+      location.replace(`auth.html?next=${encodeURIComponent(here + location.search + location.hash)}#login`);
+    } else if (JSON.stringify(user) !== before) {
+      location.reload(); // البيانات اتغيّرت من مكان تاني (جهاز تاني أو الأدمن) → اعرض الجديدة
+    }
+  });
+}
 
 // رسالة بعد التحويل من صفحة لصفحة (زي بعد تسجيل الدخول)
 try {

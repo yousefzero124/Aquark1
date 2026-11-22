@@ -196,21 +196,33 @@
     const b = e.target.closest("[data-role]");
     if (b) { roleFilter = b.dataset.role; renderUsers(); }
   });
-  $("usersBody").addEventListener("change", (e) => {
+  $("usersBody").addEventListener("change", async (e) => {
     const sel = e.target.closest("[data-role-for]");
     if (!sel || sel.dataset.roleFor === me.id || !ROLES.includes(sel.value)) return;
-    Auth.updateUser(sel.dataset.roleFor, { role: sel.value });
-    Notifs.push(sel.dataset.roleFor, "role", { role: sel.value });
-    toast(t("role_changed"), "success");
+    sel.disabled = true;
+    try {
+      await Auth.setRole(sel.dataset.roleFor, sel.value);
+      await Auth.loadUsers();
+      Notifs.push(sel.dataset.roleFor, "role", { role: sel.value });
+      toast(t("role_changed"), "success");
+    } catch (err) {
+      toast(t(err.message));
+    }
     renderAll();
   });
-  $("usersBody").addEventListener("click", (e) => {
+  $("usersBody").addEventListener("click", async (e) => {
     const del = e.target.closest("[data-del-user]");
     if (!del || del.dataset.delUser === me.id) return;
     const u = Auth.users().find((x) => x.id === del.dataset.delUser);
     if (!u || !confirm(t("confirm_delete_user", { name: u.name }))) return;
-    Auth.removeUser(u.id);
-    toast(t("user_deleted"));
+    del.disabled = true;
+    try {
+      await Auth.removeUser(u.id);
+      await Auth.loadUsers();
+      toast(t("user_deleted"));
+    } catch (err) {
+      toast(t(err.message));
+    }
     renderAll();
   });
   // عرض المستخدم من أي مكان في الصفحة (الجدول أو أحدث المستخدمين)
@@ -311,6 +323,8 @@
     renderUsers();
     renderListings();
   }
+  // اعرض النسخة المحفوظة على طول، وبعدين هات الحسابات الجديدة من السيرفر
   renderAll();
   showTab(location.hash.slice(1));
+  Auth.loadUsers().then(renderAll).catch((err) => toast(t(err.message)));
 })();

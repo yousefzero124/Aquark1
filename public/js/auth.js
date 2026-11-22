@@ -12,11 +12,13 @@
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const $ = (id) => document.getElementById(id);
 
-  // لو مسجل دخول بالفعل → رجّعه
+  // لو مسجل دخول بالفعل (والسيرفر أكد) → رجّعه
   if (Auth.current()) {
-    sessionStorage.setItem("aqarak_flash", t("already_logged"));
-    location.replace(next);
-    return;
+    Auth.refresh().then((user) => {
+      if (!user) return;
+      sessionStorage.setItem("aqarak_flash", t("already_logged"));
+      location.replace(next);
+    });
   }
 
   /* --- إيد بتسلّم جنب "أهلاً بيك تاني" --- */
@@ -110,6 +112,17 @@
     form.querySelectorAll(".invalid").forEach((el) => el.classList.remove("invalid"));
   }
   function mark(input) { input.classList.add("invalid"); input.focus(); }
+  // الزرار بيتقفل لحد ما السيرفر يرد (عشان محدش يدوس مرتين)
+  async function busy(form, fn) {
+    const btn = form.querySelector('button[type="submit"]:not(.hidden)');
+    if (form.dataset.busy) return;
+    form.dataset.busy = "1";
+    if (btn) btn.disabled = true;
+    try { await fn(); } finally {
+      delete form.dataset.busy;
+      if (btn) btn.disabled = false;
+    }
+  }
   function finish(user, msgKey) {
     sessionStorage.setItem("aqarak_flash", t(msgKey, { name: user.name.split(" ")[0] }));
     location.href = next;
@@ -123,12 +136,14 @@
     const pass = $("liPass");
     if (!EMAIL_RE.test(email.value.trim())) { mark(email); return showError(loginForm, "err_email"); }
     if (!pass.value) { mark(pass); return showError(loginForm, "err_login"); }
-    try {
-      const user = await Auth.login(email.value, pass.value);
-      finish(user, "welcome_back");
-    } catch (err) {
-      showError(loginForm, err.message);
-    }
+    await busy(loginForm, async () => {
+      try {
+        const user = await Auth.login(email.value, pass.value);
+        finish(user, "welcome_back");
+      } catch (err) {
+        showError(loginForm, err.message);
+      }
+    });
   });
 
   /* =======================================================
@@ -136,6 +151,7 @@
      ======================================================= */
   let step = 1;
   let googleProfile = null; // لو جاي من Google
+  let googleCredential = ""; // التوكن بتاع Google (السيرفر بيتأكد منه تاني وقت إنشاء الحساب)
 
   function setStep(n) {
     step = n;
@@ -153,7 +169,8 @@
   function validateStep1() {
     const role = selectedRole();
     if (!role) { showError(signupForm, "err_role"); return false; }
-    if (role === "admin" && !Auth.checkAdminCode($("suAdminCode").value)) {
+    // الكود نفسه بيتراجع على السيرفر وقت إنشاء الحساب
+    if (role === "admin" && !$("suAdminCode").value.trim()) {
       mark($("suAdminCode"));
       showError(signupForm, "err_admin_code");
       return false;
@@ -196,39 +213,40 @@
     if (!city.value) { mark(city); return showError(signupForm, "err_city"); }
     if (address.value.trim().length < 3) { mark(address); return showError(signupForm, "err_address"); }
 
-    try {
-      const user = await Auth.register({
-        name: name.value,
-        email: googleProfile ? googleProfile.email : email.value,
-        password: googleProfile ? null : pass.value,
-        role: selectedRole(),
-        adminCode: $("suAdminCode").value,
-        provider: googleProfile ? "google" : "password",
-        picture: googleProfile ? googleProfile.picture || "" : "",
-        profile: {
-          phone: normalizeMobile(phone.value),
-          age: ageNum,
-          gender: gender.value,
-          city: city.value,
-          address: address.value.trim(),
-        },
-      });
-      // الخطوة 3: التفضيلات
-      sessionStorage.setItem("aqarak_flash", t("account_created"));
-      location.href = `preferences.html?welcome=1&next=${encodeURIComponent(next)}`;
-    } catch (err) {
-      if (err.message === "err_exists") { setStep(2); mark(email); }
-      if (err.message === "err_admin_code") setStep(1);
-      showError(signupForm, err.message);
-    }
+    const payload = {
+      name: name.value.trim(),
+      role: selectedRole(),
+      adminCode: $("suAdminCode").value.trim(),
+      phone: normalizeMobile(phone.value),
+      age: ageNum,
+      gender: gender.value,
+      city: city.value,
+      address: address.value.trim(),
+    };
+    if (googleProfile) payload.googleCredential = googleCredential;
+    else { payload.email = email.value.trim(); payload.password = pass.value; }
+
+    await busy(signupForm, async () => {
+      try {
+        await Auth.register(payload);
+        // الخطوة 3: التفضيلات
+        sessionStorage.setItem("aqarak_flash", t("account_created"));
+        location.href = `preferences.html?welcome=1&next=${encodeURIComponent(next)}`;
+      } catch (err) {
+        if (err.message === "err_admin_code") { setStep(1); mark($("suAdminCode")); }
+        showError(signupForm, err.message);
+        if (err.message === "err_exists") mark(email);
+      }
+    });
   });
 
   setStep(1);
 
-  /* --- Forgot password (نسخة تجريبية: الكود بيظهر على الشاشة) --- */
+  /* --- Forgot password ---
+     السيرفر بيبعت كود من 6 أرقام على الإيميل.
+     على جهازك (من غير إعداد إيميل) الكود بيظهر على الشاشة للتجربة. */
   const forgotForm = $("forgotForm");
   let resetEmail = "";
-  let resetCode = "";
   forgotForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     clearError(forgotForm);
@@ -238,30 +256,42 @@
     if (!step1.classList.contains("hidden")) {
       const email = $("fpEmail");
       if (!EMAIL_RE.test(email.value.trim())) { mark(email); return showError(forgotForm, "err_email"); }
-      if (!Auth.findByEmail(email.value)) { mark(email); return showError(forgotForm, "err_no_user"); }
-      resetEmail = email.value.trim().toLowerCase();
-      resetCode = String(Math.floor(100000 + Math.random() * 900000));
-      const note = $("demoNote");
-      note.textContent = t("demo_code", { code: resetCode });
-      note.classList.remove("hidden");
-      step1.classList.add("hidden");
-      step2.classList.remove("hidden");
-      $("fpCode").focus();
-      return;
+      return busy(forgotForm, async () => {
+        try {
+          const data = await Auth.forgot(email.value.trim());
+          resetEmail = email.value.trim().toLowerCase();
+          const note = $("demoNote");
+          note.textContent = data.demoCode ? t("demo_code", { code: data.demoCode }) : t("code_sent");
+          note.classList.remove("hidden");
+          step1.classList.add("hidden");
+          step2.classList.remove("hidden");
+          $("fpCode").focus();
+        } catch (err) {
+          if (err.message === "err_no_user") mark(email);
+          showError(forgotForm, err.message);
+        }
+      });
     }
 
     const code = $("fpCode");
     const pass = $("fpPass");
-    if (code.value.trim() !== resetCode) { mark(code); return showError(forgotForm, "err_code"); }
+    if (!/^\d{6}$/.test(code.value.trim())) { mark(code); return showError(forgotForm, "err_code"); }
     if (pass.value.length < 6) { mark(pass); return showError(forgotForm, "err_pass_len"); }
-    await Auth.resetPassword(resetEmail, pass.value);
-    toast(t("reset_done"), "success");
-    $("liEmail").value = resetEmail;
-    forgotForm.reset();
-    $("demoNote").classList.add("hidden");
-    step2.classList.add("hidden");
-    step1.classList.remove("hidden");
-    go("login");
+    await busy(forgotForm, async () => {
+      try {
+        await Auth.reset(resetEmail, code.value.trim(), pass.value);
+      } catch (err) {
+        if (err.message === "err_code") mark(code);
+        return showError(forgotForm, err.message);
+      }
+      toast(t("reset_done"), "success");
+      $("liEmail").value = resetEmail;
+      forgotForm.reset();
+      $("demoNote").classList.add("hidden");
+      step2.classList.add("hidden");
+      step1.classList.remove("hidden");
+      go("login");
+    });
   });
 
   /* =======================================================
@@ -280,15 +310,10 @@
     });
   }
 
-  function decodeJwt(token) {
-    const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    const json = decodeURIComponent(atob(part).split("").map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`).join(""));
-    return JSON.parse(json);
-  }
-
   // مستخدم جديد من Google → يكمّل نفس خطوات التسجيل (من غير إيميل وباسورد)
-  function startGoogleSignup(profile) {
+  function startGoogleSignup(profile, credential) {
     googleProfile = profile;
+    googleCredential = credential;
     go("signup");
     $("suGoogleArea").classList.add("hidden");
     $("suPassRow").classList.add("hidden");
@@ -303,17 +328,15 @@
     setStep(1);
   }
 
-  function onGoogleCredential(response) {
-    let profile;
-    try { profile = decodeJwt(response.credential); } catch (e) { return; }
-    if (!profile.email) return;
-    const existing = Auth.findByEmail(profile.email);
-    if (existing) {
-      Auth.updateUser(existing.id, { picture: existing.picture || profile.picture || "", googleLinked: true });
-      Auth.startSession(existing);
-      return finish(existing, "welcome_back");
+  // السيرفر بيتأكد من التوكن عند Google: حساب موجود → دخول، جديد → يكمّل التسجيل
+  async function onGoogleCredential(response) {
+    try {
+      const data = await Auth.google(response.credential);
+      if (data.user) return finish(data.user, "welcome_back");
+      if (data.needsSignup) startGoogleSignup(data.profile, response.credential);
+    } catch (err) {
+      toast(t(err.message), "info-long");
     }
-    startGoogleSignup(profile);
   }
 
   if (!canUseGoogle) {

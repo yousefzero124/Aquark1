@@ -111,7 +111,7 @@
   });
   $("avatarRemove").addEventListener("click", () => { picture = ""; renderAvatar(); });
 
-  profileForm.addEventListener("submit", (e) => {
+  profileForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     clearError(profileForm);
     const name = $("pName");
@@ -139,10 +139,13 @@
       picture,
     };
     if (user.role !== "admin" && roleOptions.includes($("pRole").value)) patch.role = $("pRole").value;
+    const btn = profileForm.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
     try {
-      Auth.updateUser(user.id, patch);
+      await Auth.updateMe(patch);
     } catch (err) {
-      return showError(profileForm, "err_storage");
+      if (btn) btn.disabled = false;
+      return showError(profileForm, err.message);
     }
     savedAndReload("profile");
   });
@@ -154,9 +157,13 @@
     mode: "form",
     role: user.role,
     initial: user.prefs,
-    onSave(prefs) {
-      user = Auth.updateUser(user.id, { prefs });
-      toast(t("prefs_saved"), "success");
+    async onSave(prefs) {
+      try {
+        user = await Auth.updateMe({ prefs });
+        toast(t("prefs_saved"), "success");
+      } catch (err) {
+        toast(t(err.message));
+      }
     },
   });
 
@@ -164,7 +171,7 @@
      Security
      ======================================================= */
   const secForm = $("panel-security");
-  const hasPassword = !!user.passHash;
+  const hasPassword = !!user.hasPassword;
   $("googleNote").classList.toggle("hidden", hasPassword);
   $("curPassGroup").classList.toggle("hidden", !hasPassword);
 
@@ -174,11 +181,15 @@
     const cur = $("sCur");
     const n1 = $("sNew");
     const n2 = $("sNew2");
-    if (hasPassword && !(await Auth.checkPassword(Auth.current(), cur.value))) { mark(cur); return showError(secForm, "err_current_password"); }
+    if (hasPassword && !cur.value) { mark(cur); return showError(secForm, "err_current_password"); }
     if (n1.value.length < 6) { mark(n1); return showError(secForm, "err_pass_len"); }
     if (n1.value !== n2.value) { mark(n2); return showError(secForm, "err_pass_match"); }
-    await Auth.setPassword(user.id, n1.value);
-    Notifs.push(user.id, "password");
+    try {
+      user = await Auth.changePassword(hasPassword ? cur.value : "", n1.value);
+    } catch (err) {
+      if (err.message === "err_current_password") mark(cur);
+      return showError(secForm, err.message);
+    }
     secForm.reset();
     toast(t("password_changed"), "success");
     if (!hasPassword) setTimeout(() => location.reload(), 800);
@@ -187,13 +198,17 @@
   /* =======================================================
      Account
      ======================================================= */
-  $("switchAccount").addEventListener("click", () => {
-    Auth.logout();
+  $("switchAccount").addEventListener("click", async () => {
+    await Auth.logout();
     location.href = "auth.html#login";
   });
-  $("deleteAccount").addEventListener("click", () => {
+  $("deleteAccount").addEventListener("click", async () => {
     if (!confirm(t("confirm_delete_account"))) return;
-    Auth.deleteUser(user.id);
+    try {
+      await Auth.deleteMe();
+    } catch (err) {
+      return toast(t(err.message));
+    }
     sessionStorage.setItem("aqarak_flash", t("account_deleted"));
     location.href = "index.html";
   });

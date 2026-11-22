@@ -1,8 +1,9 @@
 /* =========================================================
-   حماية الصفحات: الموقع كله محتاج تسجيل دخول.
-   الملف ده بيتحمّل في <head> قبل أي حاجة، ولو مفيش حساب مسجّل
-   بيخفي الصفحة ويحوّل على صفحة الدخول، وبعد الدخول بيرجع لنفس الصفحة.
-   (صفحة auth.html بس هي اللي مفتوحة للكل)
+   حماية الصفحات: لازم تسجيل دخول عشان تشوف أي حاجة في الموقع
+   الملف ده بيتحمّل في <head> قبل أي حاجة، فلو مفيش جلسة
+   بيحوّل لصفحة الدخول قبل ما الصفحة تظهر.
+   (aqarak_me = نسخة من بيانات المستخدم بعد ما السيرفر يأكد الدخول؛
+    main.js بيتأكد من السيرفر تاني بعد ما الصفحة تفتح)
    ========================================================= */
 (function () {
   function toLogin() {
@@ -12,11 +13,7 @@
     location.replace("auth.html?next=" + encodeURIComponent(here + location.search + location.hash) + "#login");
   }
   try {
-    var session = JSON.parse(localStorage.getItem("aqarak_session") || "null");
-    var users = JSON.parse(localStorage.getItem("aqarak_users") || "[]");
-    var ok = session && users.some(function (u) { return u.id === session.userId; });
-    if (!ok) toLogin();
-  } catch (e) {
-    toLogin();
-  }
+    var me = JSON.parse(localStorage.getItem("aqarak_me") || "null");
+    if (!me || !me.id) toLogin();
+  } catch (e) { toLogin(); }
 })();

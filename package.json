@@ -1,0 +1,11 @@
+{
+  "name": "aqarak",
+  "private": true,
+  "description": "Aqarak — Port Said real estate site (static site + accounts API)",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  }
+}
