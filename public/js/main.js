@@ -67,6 +67,9 @@ const ICONS = {
   send: LI("send-horizontal"),
   pano: LI("rotate-3d"),
   video: LI("clapperboard"),
+  compare: LI("scale"),
+  trophy: LI("trophy"),
+  share: LI("link"),
   play: LI("play"),
   bellPlus: LI("bell-plus"),
   history: LI("chart-line"),
@@ -169,7 +172,7 @@ const Auth = {
   },
   // تسجيل خروج / حذف حساب: امسح كل النسخ المحفوظة في المتصفح
   forget() {
-    ["aqarak_me", "aqarak_users_cache", "aqarak_favs_cache", "aqarak_notifs_cache", "aqarak_listings_cache", "aqarak_moderation_cache"]
+    ["aqarak_me", "aqarak_users_cache", "aqarak_favs_cache", "aqarak_notifs_cache", "aqarak_listings_cache", "aqarak_moderation_cache", "aqarak_compare"]
       .forEach((k) => Store.remove(k));
   },
   // بيسأل السيرفر مين مسجل دخول (null = مفيش جلسة). لو النت فاصل بيرجع النسخة المحفوظة.
@@ -419,6 +422,96 @@ const Favs = {
     return on;
   },
 };
+/* ---------- المقارنة (لحد 4 عقارات من نفس النوع: بيع مع بيع أو إيجار مع إيجار) ---------- */
+const Compare = {
+  KEY: "aqarak_compare",
+  MAX: 4,
+  ids() { return (Store.get(this.KEY, []) || []).filter((id) => Listings.get(id)); },
+  has(id) { return this.ids().includes(id); },
+  _save(ids) { saveCache(this.KEY, ids); emit("compare:changed"); },
+  // بيرجّع true (اتضاف) / false (اتشال) أو بيرمي Error بمفتاح الخطأ
+  toggle(id) {
+    const ids = this.ids();
+    if (ids.includes(id)) { this._save(ids.filter((x) => x !== id)); return false; }
+    const l = Listings.get(id);
+    if (!l) throw new Error("err_not_found");
+    if (ids.length >= this.MAX) throw new Error("err_compare_max");
+    const first = Listings.get(ids[0]);
+    if (first && first.purpose !== l.purpose) throw new Error("err_compare_mix");
+    this._save([...ids, id]);
+    return true;
+  },
+  remove(id) { this._save(this.ids().filter((x) => x !== id)); },
+  clear() { this._save([]); },
+};
+function refreshCompareButtons() {
+  document.querySelectorAll("[data-compare]").forEach((b) => {
+    const on = Compare.has(b.dataset.compare);
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+    b.title = t(on ? "compare_remove" : "compare_add");
+  });
+  document.querySelectorAll("[data-compare-modal]").forEach((b) => {
+    const on = Compare.has(b.dataset.compareModal);
+    b.classList.toggle("on", on);
+    b.querySelector("span").textContent = t(on ? "compare_remove" : "compare_add");
+  });
+}
+function handleCompare(id) {
+  try {
+    const on = Compare.toggle(id);
+    toast(t(on ? "compare_added" : "compare_removed"), on ? "success" : "");
+  } catch (err) {
+    toast(t(err.message), "error");
+  }
+  refreshCompareButtons();
+}
+// شريط المقارنة تحت الشاشة: صور العقارات المختارة + "قارن دلوقتي"
+function renderCompareTray() {
+  let tray = document.getElementById("cmpTray");
+  const page = document.body.dataset.page;
+  const ids = Auth.current() && page !== "compare" && page !== "auth" ? Compare.ids() : [];
+  if (!ids.length) { if (tray) tray.remove(); document.body.classList.remove("has-cmp-tray"); return; }
+  if (!tray) {
+    tray = document.createElement("div");
+    tray.id = "cmpTray";
+    tray.className = "cmp-tray";
+    tray.setAttribute("role", "region");
+    document.body.appendChild(tray);
+  }
+  document.body.classList.add("has-cmp-tray");
+  const slots = Array.from({ length: Compare.MAX }, (_, i) => {
+    const l = Listings.get(ids[i]);
+    if (!l) return `<span class="cmp-slot cmp-slot-free">${ICONS.plus}</span>`;
+    const img = l.images && l.images[0];
+    return `<span class="cmp-slot" title="${esc(loc(l.title))}">
+      ${img ? `<img src="${esc(img)}" alt="" onerror="imgFail(this)">` : `<span class="img-fallback">${ICONS.house}</span>`}
+      <button type="button" class="cmp-x" data-cmp-remove="${esc(l.id)}" aria-label="${esc(t("compare_remove"))}">${ICONS.close}</button>
+    </span>`;
+  }).join("");
+  tray.setAttribute("aria-label", t("page_compare"));
+  tray.innerHTML = `
+    <div class="cmp-tray-inner container">
+      <div class="cmp-info">${ICONS.compare}<div><strong>${esc(t("compare_tray", { n: ids.length, max: Compare.MAX }))}</strong>
+        <small>${esc(t(ids.length < 2 ? "compare_need2" : "compare_ready"))}</small></div></div>
+      <div class="cmp-slots">${slots}</div>
+      <div class="cmp-actions">
+        <button type="button" class="btn btn-ghost btn-sm" data-cmp-clear>${esc(t("compare_clear"))}</button>
+        <a class="btn btn-primary btn-sm${ids.length < 2 ? " disabled" : ""}" href="compare.html" ${ids.length < 2 ? 'aria-disabled="true" tabindex="-1"' : ""}>${ICONS.compare}<span>${esc(t("compare_now"))}</span></a>
+      </div>
+    </div>`;
+}
+document.addEventListener("compare:changed", () => { renderCompareTray(); refreshCompareButtons(); });
+document.addEventListener("listings:changed", renderCompareTray);
+document.addEventListener("click", (e) => {
+  const rm = e.target.closest("[data-cmp-remove]");
+  if (rm) { e.stopPropagation(); Compare.remove(rm.dataset.cmpRemove); return; }
+  if (e.target.closest("[data-cmp-clear]")) { Compare.clear(); return; }
+  const go = e.target.closest(".cmp-actions a.disabled");
+  if (go) { e.preventDefault(); toast(t("compare_need2")); }
+});
+window.addEventListener("storage", (e) => { if (e.key === "aqarak_compare") { renderCompareTray(); refreshCompareButtons(); } });
+
 // قلوب المفضلة الظاهرة على الشاشة تتظبط حسب المفضلة الحالية
 function refreshFavButtons() {
   document.querySelectorAll("[data-fav]").forEach((b) => {
@@ -759,12 +852,8 @@ function renderHeader() {
             <small>${esc(user.email)}</small><br>
             <span class="role-chip">${esc(roleName(user.role))}</span>
           </div>
-          ${isAdmin
-            ? `<a href="admin.html">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>
-               <a href="admin.html#listings">${ICONS.list}<span>${esc(t("manage_listings"))}</span></a>`
-            : hasMine
-              ? `<a href="dashboard.html">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>`
-              : `<a href="dashboard.html">${ICONS.chart}<span>${esc(t("nav_dashboard"))}</span></a>`}
+          ${isAdmin ? `<a href="admin.html">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>` : ""}
+          ${hasMine ? `<a href="dashboard.html">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>` : ""}
           <a href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>
           <a href="properties.html?favs=1">${ICONS.heart}<span>${esc(t("my_favs"))}</span></a>
           <a href="settings.html#prefs">${ICONS.sliders}<span>${esc(t("tab_prefs"))}</span></a>
@@ -877,7 +966,11 @@ function propCard(l) {
         ${hasPrefs(user) && matchScore(l, user.prefs) >= 0.75 ? `<span class="match-chip">${ICONS.star}${esc(t("match_chip"))}</span>` : ""}
       </div>
       <div class="prop-body">
-        <div class="prop-price">${priceHTML(l)}</div>
+        <div class="prop-price-row">
+          <div class="prop-price">${priceHTML(l)}</div>
+          ${user ? `<button type="button" class="cmp-btn${Compare.has(l.id) ? " on" : ""}" data-compare="${esc(l.id)}" aria-pressed="${Compare.has(l.id)}"
+            title="${esc(t(Compare.has(l.id) ? "compare_remove" : "compare_add"))}">${ICONS.compare}<span>${esc(t("compare"))}</span></button>` : ""}
+        </div>
         <h3 class="prop-title">${esc(loc(l.title))}</h3>
         <div class="prop-loc">${ICONS.pin}<span>${esc(loc(l.address) || cityName(l.city))}</span></div>
         <div class="prop-meta">${meta.join("")}</div>
@@ -1028,6 +1121,9 @@ function openDetails(id) {
             ${ICONS.heart}
             <span>${esc(t(fav ? "fav_remove" : "fav_add"))}</span>
           </button>
+          ${user ? `<button class="btn btn-ghost btn-block cmp-text-btn ${Compare.has(l.id) ? "on" : ""}" type="button" data-compare-modal="${esc(l.id)}">
+            ${ICONS.compare}<span>${esc(t(Compare.has(l.id) ? "compare_remove" : "compare_add"))}</span>
+          </button>` : ""}
         </aside>
       </div>
     </div>`);
@@ -1295,6 +1391,9 @@ document.addEventListener("click", (e) => {
   const favBtn = e.target.closest("[data-fav]");
   if (favBtn) { e.stopPropagation(); handleFav(favBtn.dataset.fav); return; }
 
+  const cmpBtn = e.target.closest("[data-compare], [data-compare-modal]");
+  if (cmpBtn) { e.stopPropagation(); handleCompare(cmpBtn.dataset.compare || cmpBtn.dataset.compareModal); return; }
+
   const card = e.target.closest("[data-prop-id]");
   if (card) { openDetails(card.dataset.propId); return; }
 
@@ -1327,6 +1426,7 @@ document.addEventListener("keydown", (e) => {
 renderHeader();
 renderFooter();
 applyI18n();
+renderCompareTray();
 
 // الهيدر بيغمق لما تنزل في الصفحة
 (function () {
