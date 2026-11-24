@@ -3110,7 +3110,7 @@ td.is-winner { background: rgba(245, 197, 24, .05); }
 .inv-listing small { color: var(--muted); font-weight: 600; font-size: 12px; }
 .inv-listing-go { color: var(--yellow); }
 
-.inv-results { position: sticky; top: 90px; display: grid; gap: 20px; }
+.inv-results { display: grid; gap: 20px; } /* ثابت في مكانه — مش بيمشي مع السكرول */
 .inv-results .card + .card { margin-top: 0; }
 .inv-empty { text-align: center; display: grid; justify-items: center; gap: 10px; padding: 48px 24px; }
 .inv-empty h2 { margin: 6px 0 0; }
@@ -3153,7 +3153,6 @@ td.is-winner { background: rgba(245, 197, 24, .05); }
 .inv-f-calc b { color: var(--yellow); }
 @media (max-width: 960px) {
   .inv-layout { grid-template-columns: minmax(0, 1fr); }
-  .inv-results { position: static; }
 }
 @media (max-width: 640px) {
   .inv-fs { grid-template-columns: 1fr; }
