@@ -762,8 +762,9 @@ function renderHeader() {
           ${isAdmin
             ? `<a href="admin.html">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>
                <a href="admin.html#listings">${ICONS.list}<span>${esc(t("manage_listings"))}</span></a>`
-            : `<a href="dashboard.html">${ICONS.chart}<span>${esc(t("nav_dashboard"))}</span></a>`}
-          ${hasMine ? `<a href="dashboard.html#listings">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>` : ""}
+            : hasMine
+              ? `<a href="dashboard.html">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>`
+              : `<a href="dashboard.html">${ICONS.chart}<span>${esc(t("nav_dashboard"))}</span></a>`}
           <a href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>
           <a href="properties.html?favs=1">${ICONS.heart}<span>${esc(t("my_favs"))}</span></a>
           <a href="settings.html#prefs">${ICONS.sliders}<span>${esc(t("tab_prefs"))}</span></a>

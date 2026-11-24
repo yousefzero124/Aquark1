@@ -1,9 +1,8 @@
 /* =========================================================
-   لوحة المستخدم — كل نوع حساب ليه لوحة:
-   - المشتري:  مفضلته، اللي نزل سعره، بحثه المحفوظ، رسايله، المرشّح ليه
-   - البروكر:  عقاراته (حفظ / رسايل / حالة / تعديل)، آخر رسايل المشترين
-   - المستثمر: عقاراته + أعلى عائد في السوق + سعر المتر في كل حي + مفضلته
-   (الأدمن ليه لوحة التحكم admin.html)
+   dashboard.html
+   - المشتري: "لوحتي" — مفضلته، اللي نزل سعره، بحثه المحفوظ، رسايله، المرشّح ليه
+   - البروكر والمستثمر: "عقاراتي" بس — العقارات اللي نزلوها (حفظ / رسايل / حالة / تعديل / سعر / حذف)
+   (الأدمن ليه "الداشبورد" في admin.html)
    ========================================================= */
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -19,8 +18,16 @@
 
   /* --- الراس --- */
   $("dashRole").textContent = roleName(role);
-  $("dashHello").textContent = t("dash_hello", { name: me.name.split(" ")[0] });
-  $("dashSub").textContent = t(`dash_sub_${role}`);
+  if (owns) {
+    // البروكر والمستثمر: الصفحة دي = "عقاراتي" بس
+    document.title = `${t("brand")} | ${t("page_my_listings")}`;
+    $("dashHello").textContent = t("page_my_listings");
+    $("dashSub").textContent = t("dash_sub_mine");
+    $("dashKpis").classList.add("hidden");
+  } else {
+    $("dashHello").textContent = t("dash_hello", { name: me.name.split(" ")[0] });
+    $("dashSub").textContent = t("dash_sub_buyer");
+  }
   $("dashActions").innerHTML = owns
     ? `<a class="btn btn-primary" href="sell.html">${ICONS.plus}<span>${esc(t("dash_add"))}</span></a>
        <a class="btn btn-outline" href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>`
@@ -179,86 +186,31 @@
             <th>${esc(t("col_chats"))}</th><th>${esc(t("col_state"))}</th><th>${esc(t("col_actions"))}</th>
           </tr></thead><tbody>${rows}</tbody></table></div>`
       : empty(t("dash_empty_mine"), `<a class="btn btn-primary btn-sm" href="sell.html">${ICONS.plus}<span>${esc(t("dash_add"))}</span></a>`);
-    return section("listings", ICONS.building, t("my_listings"), body,
-      mine.length ? `<a class="dash-link" href="sell.html">${ICONS.plus}${esc(t("dash_add"))}</a>` : "");
-  }
-
-  // المستثمر: أعلى عائد في السوق
-  function topYieldSection() {
-    // من غير الأراضي (العائد فيها مضاربة مش إيجار)
-    const top = Listings.all().filter((l) => l.purpose === "sale" && l.yield && l.type !== "land")
-      .sort((a, b) => b.yield - a.yield).slice(0, 3);
-    return section("yield", ICONS.chart, t("dash_top_yield"),
-      `<div class="prop-grid dash-grid-3">${top.map(propCard).join("")}</div>`,
-      `<a class="dash-link" href="properties.html?mode=buy&sort=yield">${esc(t("browse_props"))}</a>`);
-  }
-  // المستثمر: متوسط سعر المتر للبيع في كل حي
-  function m2Section() {
-    const rows = Object.keys(CITIES).map((k) => {
-      const list = Listings.all().filter((l) => l.purpose === "sale" && l.city === k && l.type !== "land" && l.size > 0);
-      const avg = list.length ? Math.round(list.reduce((s, l) => s + l.price / l.size, 0) / list.length / 100) * 100 : 0;
-      return { label: cityName(k), value: avg };
-    }).filter((r) => r.value).sort((a, b) => b.value - a.value);
-    const max = Math.max(1, ...rows.map((r) => r.value));
-    return section("m2", ICONS.history, t("dash_m2"), `
-      <div class="bars">${rows.map((r) => `
-        <div class="bar-row" title="${esc(r.label)}: ${fmtNum(r.value)}">
-          <span class="bar-label">${esc(r.label)}</span>
-          <span class="bar-track"><span class="bar-fill" style="width:${(r.value / max) * 100}%"></span></span>
-          <span class="bar-val">${fmtNum(r.value)}</span>
-        </div>`).join("")}</div>
-      <p class="hint" style="margin:10px 0 0">${esc(t("dash_m2_note"))} (${esc(t("currency"))} / ${esc(t("sqm"))})</p>`);
+    return section("listings", ICONS.building, `${t("my_listings")} (${fmtNum(mine.length)})`, body);
   }
 
   /* --- الأرقام اللي فوق --- */
   function renderKpis() {
+    if (owns) return;
     const visible = new Set(Listings.all().map((l) => l.id));
     const favN = Favs.list().filter((id) => visible.has(id)).length;
     const chatsNew = chats.filter((c) => c.unread).length;
-    let items;
-    if (role === "buyer") {
-      items = [
-        kpi(ICONS.heart, fmtNum(favN), t("kpi_favs")),
-        kpi(ICONS.bellRing, fmtNum(searches.length), t("kpi_searches")),
-        kpi(ICONS.message, fmtNum(chatsNew), t("kpi_chats_new")),
-        kpi(ICONS.bell, fmtNum(Notifs.unread()), t("kpi_notifs_new")),
-      ];
-    } else {
-      const mine = Listings.byOwner(me.id);
-      const saves = mine.reduce((s, l) => s + ((stats[l.id] && stats[l.id].favorites) || 0), 0);
-      const hidden = mine.filter((l) => Moderation.isHidden(l.id)).length;
-      items = [
-        kpi(ICONS.building, fmtNum(mine.length - hidden), t("kpi_my_listings")),
-        kpi(ICONS.heart, fmtNum(saves), t("kpi_saves")),
-        kpi(ICONS.message, fmtNum(chatsNew), t("kpi_chats_new")),
-      ];
-      if (role === "investor") {
-        const best = Listings.all().filter((l) => l.purpose === "sale" && l.yield && l.type !== "land").reduce((m, l) => Math.max(m, l.yield), 0);
-        items.push(kpi(ICONS.chart, `${best}%`, t("kpi_best_yield")));
-      } else {
-        items.push(kpi(ICONS.eyeOff, fmtNum(hidden), t("kpi_hidden_mine")));
-      }
-    }
-    $("dashKpis").innerHTML = items.join("");
+    $("dashKpis").innerHTML = [
+      kpi(ICONS.heart, fmtNum(favN), t("kpi_favs")),
+      kpi(ICONS.bellRing, fmtNum(searches.length), t("kpi_searches")),
+      kpi(ICONS.message, fmtNum(chatsNew), t("kpi_chats_new")),
+      kpi(ICONS.bell, fmtNum(Notifs.unread()), t("kpi_notifs_new")),
+    ].join("");
   }
 
   /* --- الرسم --- */
   function render() {
     renderKpis();
-    let html = "";
-    if (role === "buyer") {
-      html = favoritesSection(6)
+    $("dashBody").innerHTML = owns
+      ? myListingsSection() // البروكر والمستثمر: عقاراتهم بس
+      : favoritesSection(6)
         + `<div class="dash-cols">${dropsSection()}${searchesSection()}</div>`
         + `<div class="dash-cols">${chatsSection()}${recsSection()}</div>`;
-    } else if (role === "broker") {
-      html = myListingsSection() + `<div class="dash-cols">${chatsSection()}${searchesSection()}</div>`;
-    } else { // investor
-      html = myListingsSection()
-        + topYieldSection()
-        + `<div class="dash-cols">${m2Section()}${chatsSection()}</div>`
-        + favoritesSection(3);
-    }
-    $("dashBody").innerHTML = html;
   }
 
   /* --- أحداث --- */

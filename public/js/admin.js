@@ -28,7 +28,7 @@
   document.querySelectorAll("[data-ico]").forEach((el) => { el.outerHTML = ICONS[el.dataset.ico]; });
 
   const ROLES = ["buyer", "investor", "broker", "admin"];
-  const locale = Lang.get() === "ar" ? "ar-EG" : "en-US";
+  const locale = Lang.get() === "ar" ? "ar-EG-u-nu-latn" : "en-US"; // أرقام عادية زي باقي الموقع
   const SEP = Lang.get() === "ar" ? "، " : ", ";
   const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }) : "—");
   const avatarHTML = (u) => `<span class="avatar">${u.picture
@@ -96,6 +96,20 @@
     bars($("chartCities"), countBy(visible, "city", Object.keys(CITIES), cityName));
     bars($("chartTypes"), countBy(visible, "type", Object.keys(TYPES), typeName));
 
+    // أكتر الناس نشراً للعقارات (البروكرز والمستثمرين)
+    const publishers = users
+      .map((u) => ({ u, n: Listings.byOwner(u.id).length }))
+      .filter((x) => x.n > 0)
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 5);
+    $("topPublishers").innerHTML = publishers.length
+      ? publishers.map(({ u, n }) => `
+          <button type="button" class="mini-item" data-view-user="${esc(u.id)}">
+            ${avatarHTML(u)}
+            <span><strong>${esc(u.name)}</strong><small>${esc(roleName(u.role))} · ${esc(t("count_listings", { n: fmtNum(n) }))}</small></span>
+          </button>`).join("")
+      : `<p class="hint">${esc(t("no_publishers"))}</p>`;
+
     const recentU = [...users].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 5);
     $("recentUsers").innerHTML = recentU.length
       ? recentU.map((u) => `
@@ -141,13 +155,14 @@
         </select></td>
         <td dir="ltr" class="nowrap">${esc(u.phone || "—")}</td>
         <td class="nowrap">${esc(u.city ? cityName(u.city) : "—")}</td>
+        <td class="nowrap">${fmtNum(Listings.byOwner(u.id).length)}</td>
         <td class="nowrap">${esc(fmtDate(u.createdAt))}</td>
         <td><div class="row-actions">
           <button type="button" class="btn btn-outline btn-sm" data-view-user="${esc(u.id)}">${esc(t("view"))}</button>
           ${self ? "" : `<button type="button" class="btn btn-danger btn-sm" data-del-user="${esc(u.id)}">${esc(t("delete"))}</button>`}
         </div></td>
       </tr>`;
-    }).join("") : `<tr><td colspan="6" class="empty-cell">${esc(t("no_users"))}</td></tr>`;
+    }).join("") : `<tr><td colspan="7" class="empty-cell">${esc(t("no_users"))}</td></tr>`;
   }
 
   function prefsSummary(p) {
