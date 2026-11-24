@@ -169,11 +169,10 @@
   $("videoZoneIco").outerHTML = ICONS.upload;
   $("videoRemove").innerHTML = `${ICONS.trash}<span>${esc(t("video_remove"))}</span>`;
   let uploadCfg = { video: "local", maxMB: 50, types: ["video/mp4", "video/webm", "video/quicktime"] };
+  // الفيديو من جهاز المستخدم بس. لو التخزين لسه متفعّلش على الموقع بتظهر ملحوظة
   Api.call("GET", "/api/uploads/config").then((cfg) => {
     uploadCfg = cfg;
-    const off = cfg.video === "off";
-    $("videoZone").classList.toggle("hidden", off);
-    $("videoOff").classList.toggle("hidden", !off);
+    $("videoOff").classList.toggle("hidden", cfg.video !== "off");
   }).catch(() => {});
 
   function renderVideo() {
@@ -239,15 +238,6 @@
       $("videoZone").classList.remove("busy");
     }
   });
-  $("ytAdd").addEventListener("click", () => {
-    const v = parseYouTube($("sYoutube").value);
-    if (!v) { $("sYoutube").classList.add("invalid"); return toast(t("err_youtube"), "error"); }
-    $("sYoutube").classList.remove("invalid");
-    $("sYoutube").value = "";
-    video = { value: v, preview: { type: "youtube", id: v.slice(8) } };
-    renderVideo();
-  });
-  $("sYoutube").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("ytAdd").click(); } });
   $("videoRemove").addEventListener("click", () => { video = null; renderVideo(); });
 
   /* --- وضع التعديل: نملا الفورم من الإعلان --- */

@@ -554,7 +554,7 @@ async function health(res) {
     sessionSecret: IS_VERCEL ? (secret.length >= 32 ? "ok" : secret ? "too_short" : "missing") : "ok (local)",
     adminCode: adminCode() ? "ok" : "missing",
     resetEmail: process.env.RESEND_API_KEY && process.env.EMAIL_FROM ? "ok" : "off",
-    videoUpload: { blob: "ok", local: "ok (local)", off: "off (youtube only)" }[require("./video").mode()],
+    videoUpload: { blob: "ok", local: "ok (local)", off: "off (needs Vercel Blob)" }[require("./video").mode()],
     google: process.env.GOOGLE_CLIENT_ID ? "ok" : "off",
   });
 }
