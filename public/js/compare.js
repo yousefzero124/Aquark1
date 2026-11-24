@@ -10,7 +10,7 @@
   const $ = (id) => document.getElementById(id);
   const me = Auth.current();
   if (!me) return;
-  if (!canCompare(me)) { location.replace("index.html"); return; } // المقارنة للمشتري بس
+  if (!canCompare(me)) { location.replace("index.html"); return; } // المقارنة للمشتري والمستثمر بس
 
   // لينك مقارنة متبعت من حد → نحطه في قايمة المقارنة
   const urlIds = (new URLSearchParams(location.search).get("ids") || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -188,7 +188,14 @@
       <section class="card cmp-card">
         <div class="cmp-table-wrap">
           <table class="cmp-table" style="--cols:${list.length}">
-            <thead><tr><th class="cmp-corner" scope="col">${ICONS.compare}<span>${esc(t("compare_count", { n: list.length }))}</span></th>${head}</tr></thead>
+            <thead><tr><th class="cmp-corner" scope="col">
+              <div class="cmp-legend">
+                <span class="cmp-legend-title">${ICONS.compare}${esc(t("compare_count", { n: list.length }))}</span>
+                <span class="cmp-legend-row"><span class="cmp-best">${esc(t("compare_best"))}</span>${esc(t("cmp_legend_best"))}</span>
+                <span class="cmp-legend-row"><span class="cmp-legend-meter"><span></span></span>${esc(t("cmp_legend_score"))}</span>
+                <span class="cmp-legend-row"><span class="cmp-legend-win">${ICONS.trophy}</span>${esc(t("cmp_legend_win"))}</span>
+              </div>
+            </th>${head}</tr></thead>
             <tbody>${body}</tbody>
           </table>
         </div>

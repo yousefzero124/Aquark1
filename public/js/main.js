@@ -423,8 +423,8 @@ const Favs = {
   },
 };
 /* ---------- المقارنة (لحد 4 عقارات من نفس النوع: بيع مع بيع أو إيجار مع إيجار) ----------
-   للمشتري بس — باقي الحسابات مش بيظهرلهم زرار "قارن" ولا الشريط ولا الصفحة */
-function canCompare(user = Auth.current()) { return !!(user && user.role === "buyer"); }
+   للمشتري والمستثمر بس — البروكر والأدمن مش بيظهرلهم زرار "قارن" ولا الشريط ولا الصفحة */
+function canCompare(user = Auth.current()) { return !!(user && (user.role === "buyer" || user.role === "investor")); }
 const Compare = {
   KEY: "aqarak_compare",
   MAX: 4,
