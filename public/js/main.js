@@ -70,6 +70,7 @@ const ICONS = {
   compare: LI("scale"),
   trophy: LI("trophy"),
   share: LI("link"),
+  calc: LI("calculator"),
   play: LI("play"),
   bellPlus: LI("bell-plus"),
   history: LI("chart-line"),
@@ -296,6 +297,98 @@ function canPost(user) { return !!(user && POSTER_ROLES.includes(user.role)); }
 function canEditListing(l, user = Auth.current()) {
   return !!(user && l && !Listings.isSeed(l.id) && (l.ownerId === user.id || user.role === "admin"));
 }
+
+/* =========================================================
+   حسابات الاستثمار — للمستثمر بس
+   المعادلات (ثابتة في كل الموقع: نافذة العقار، المقارنة، الحاسبة):
+     ROI                = (صافي ربح الاستثمار ÷ تكلفة الاستثمار المبدئية) × 100
+     العائد الإجمالي    = (دخل الإيجار السنوي ÷ سعر الشراء) × 100
+     العائد الصافي      = (صافي دخل الإيجار السنوي ÷ سعر الشراء) × 100
+     فترة الاسترداد     = تكلفة الاستثمار المبدئية ÷ صافي التدفق النقدي السنوي
+   التعريفات:
+     تكلفة الاستثمار المبدئية = سعر الشراء + مصاريف الشراء (تسجيل، سمسرة، تشطيب...)
+     دخل الإيجار السنوي       = الإيجار الشهري × 12
+     صافي دخل الإيجار السنوي  = الإيجار الشهري × الشهور المؤجّرة − المصاريف السنوية
+     صافي التدفق النقدي السنوي = صافي دخل الإيجار السنوي (شراء كاش من غير قرض)
+     صافي ربح الاستثمار       = صافي الإيجار طول مدة الاحتفاظ + (قيمة البيع المتوقعة − تكلفة الاستثمار المبدئية)
+   ========================================================= */
+function canInvest(user = Auth.current()) { return !!(user && user.role === "investor"); }
+const Invest = {
+  DEFAULTS: { costsPct: 3, vacancyMonths: 1, expensesPct: 10, years: 5, growthPct: 10 },
+  FALLBACK_YIELD: 7, // لو مفيش أي بيانات: عائد إجمالي 7% (متوسط تقريبي)
+  /** الإيجار الشهري المتوقع لعقار للبيع: من العائد المكتوب في الإعلان، أو من إيجارات نفس النوع في المنطقة */
+  estimateRent(l) {
+    const round = (v) => Math.max(0, Math.round(v / 100) * 100);
+    if (!l || !l.price) return { rent: 0, source: "none" };
+    if (l.yield) return { rent: round((l.price * l.yield) / 100 / 12), source: "listing" };
+    if (l.size) {
+      const rents = Listings.all().filter((x) => x.purpose === "rent" && x.type === l.type && x.size > 0 && x.price > 0);
+      const near = rents.filter((x) => x.city === l.city);
+      const pool = near.length >= 3 ? near : rents;
+      if (pool.length >= 3) {
+        const perM = pool.map((x) => x.price / x.size).sort((a, b) => a - b);
+        const mid = perM.length >> 1;
+        const median = perM.length % 2 ? perM[mid] : (perM[mid - 1] + perM[mid]) / 2;
+        return { rent: round(median * l.size), source: near.length >= 3 ? "area" : "type" };
+      }
+    }
+    return { rent: round((l.price * this.FALLBACK_YIELD) / 100 / 12), source: "default" };
+  },
+  /** المدخلات الافتراضية لعقار */
+  inputsFor(l) {
+    const { rent, source } = this.estimateRent(l);
+    return { price: l ? l.price || 0 : 0, rent, rentSource: source, ...this.DEFAULTS };
+  },
+  /** كل المؤشرات من المدخلات. أي نتيجة مش ممكن تتحسب بترجع null */
+  calc(inp) {
+    const n = (v, min = 0, max = Infinity) => Math.min(max, Math.max(min, Number(v) || 0));
+    const price = n(inp.price);
+    const costsPct = n(inp.costsPct, 0, 100);
+    const rent = n(inp.rent);
+    const vacancy = n(inp.vacancyMonths, 0, 12);
+    const expensesPct = n(inp.expensesPct, 0, 100);
+    const years = n(inp.years, 1, 50);
+    const growthPct = n(inp.growthPct, -50, 100);
+
+    const costs = price * costsPct / 100;
+    const cost = price + costs;                              // تكلفة الاستثمار المبدئية
+    const annualRent = rent * 12;                            // دخل الإيجار السنوي
+    const collected = rent * (12 - vacancy);                 // اللي هيتحصّل فعلاً
+    const expenses = annualRent * expensesPct / 100;         // المصاريف السنوية
+    const annualNet = collected - expenses;                  // صافي دخل الإيجار السنوي = صافي التدفق النقدي
+    const saleValue = price * Math.pow(1 + growthPct / 100, years);
+    const capitalGain = saleValue - cost;
+    const rentTotal = annualNet * years;
+    const profit = rentTotal + capitalGain;                  // صافي ربح الاستثمار
+    const pct = (a, b) => (b > 0 ? (a / b) * 100 : null);
+    const roi = pct(profit, cost);
+    return {
+      price, costs, cost, rent, annualRent, collected, expenses, annualNet,
+      years, saleValue, capitalGain, rentTotal, profit,
+      gross: pct(annualRent, price),
+      net: pct(annualNet, price),
+      payback: cost > 0 && annualNet > 0 ? cost / annualNet : null,
+      roi,
+      roiYear: roi != null && roi > -100 ? (Math.pow(1 + roi / 100, 1 / years) - 1) * 100 : null,
+    };
+  },
+  /** حساب سريع بالافتراضات (للنافذة والمقارنة) — لعقارات البيع بس */
+  quick(l) {
+    if (!l || l.purpose !== "sale" || !l.price) return null;
+    const inp = this.inputsFor(l);
+    return { ...this.calc(inp), rentSource: inp.rentSource };
+  },
+  /** تقييم مبدئي للعائد الصافي */
+  grade(net) {
+    if (net == null) return null;
+    if (net >= 7) return "great";
+    if (net >= 5) return "good";
+    if (net >= 3) return "fair";
+    return "weak";
+  },
+  fmtPct(v) { return v == null ? "—" : `${(Math.round(v * 10) / 10).toLocaleString("en-US")}%`; },
+  fmtYears(v) { return v == null ? "—" : t("inv_years_n", { n: (Math.round(v * 10) / 10).toLocaleString("en-US") }); },
+};
 
 /* =========================================================
    الإعلانات والمفضلة والإشعارات — محفوظة على السيرفر
@@ -857,6 +950,7 @@ function renderHeader() {
           </div>
           ${isAdmin ? `<a href="admin.html">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>` : ""}
           ${hasMine ? `<a href="dashboard.html">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>` : ""}
+          ${canInvest(user) ? `<a href="invest.html">${ICONS.calc}<span>${esc(t("page_invest"))}</span></a>` : ""}
           <a href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>
           <a href="properties.html?favs=1">${ICONS.heart}<span>${esc(t("my_favs"))}</span></a>
           <a href="settings.html#prefs">${ICONS.sliders}<span>${esc(t("tab_prefs"))}</span></a>
@@ -1037,7 +1131,6 @@ function openDetails(id) {
   const user = Auth.current();
   const fav = user && Favs.has(l.id);
   const images = (l.images && l.images.length) ? l.images : [];
-  const isInvestor = user && (user.role === "investor" || user.role === "admin");
   const coords = listingCoords(l);
 
   const panoBtn = l.pano || l.video
@@ -1051,13 +1144,27 @@ function openDetails(id) {
           `<img src="${esc(src)}" data-src="${esc(src)}" class="${i === 0 ? "active" : ""}" alt="" onerror="this.remove()">`).join("")}</div>` : ""}`
     : `<div class="gallery-main"><div class="img-fallback">${ICONS.house}</div>${panoBtn}</div>`;
 
+  // تحليل الاستثمار: للمستثمر بس، ولعقارات البيع
   let investBox = "";
-  if (isInvestor && l.purpose === "sale" && l.yield) {
-    const monthly = Math.round((l.price * l.yield) / 100 / 12 / 100) * 100;
-    investBox = `<div class="invest-box">
-        <div style="font-weight:800;margin-bottom:4px">${icon("chart", "color:var(--success)")} ${esc(t("invest_title"))}</div>
-        <div>${esc(t("invest_text", { v: "§" })).replace("§", `<strong>${esc(l.yield)}</strong>`)}</div>
-        <div>${esc(t("invest_rent", { v: fmtPrice(monthly) }))}</div>
+  const q = canInvest(user) ? Invest.quick(l) : null;
+  if (q) {
+    const grade = Invest.grade(q.net);
+    const tile = (label, value, key) => `<div class="inv-tile${key ? ` inv-${key}` : ""}"><small>${esc(t(label))}</small><strong dir="auto">${esc(value)}</strong></div>`;
+    investBox = `<div class="inv-box">
+        <div class="inv-box-head">
+          <span>${icon("calc")}${esc(t("invest_title"))}</span>
+          ${grade ? `<span class="inv-grade g-${grade}">${esc(t(`inv_grade_${grade}`))}</span>` : ""}
+        </div>
+        <div class="inv-tiles">
+          ${tile("inv_gross", Invest.fmtPct(q.gross))}
+          ${tile("inv_net", Invest.fmtPct(q.net), "main")}
+          ${tile("inv_payback", Invest.fmtYears(q.payback))}
+          ${tile("inv_roi_n", Invest.fmtPct(q.roi))}
+        </div>
+        <div class="inv-box-foot">
+          <small>${esc(t("inv_rent_est", { v: fmtPrice(q.rent) }))} · ${esc(t(`inv_src_${q.rentSource}`))}<br>${esc(t("inv_assume", { y: q.years, g: Invest.DEFAULTS.growthPct }))}</small>
+          <a class="btn btn-outline btn-sm" href="invest.html?id=${encodeURIComponent(l.id)}">${ICONS.calc}<span>${esc(t("inv_open"))}</span></a>
+        </div>
       </div>`;
   }
 

@@ -4,6 +4,7 @@
    - تقييم من 100 لكل عقار (سعر المتر، السعر، المساحة، الغرف، التوثيق،
      الصور والجولات، نزول السعر، ومدى مناسبته لتفضيلات المستخدم)
    - "الأنسب في المقارنة دي" + أسباب الاختيار
+   - المستثمر: مجموعة "الاستثمار" (العائد الإجمالي والصافي، الاسترداد، ROI) من Invest في main.js
    - اللينك ينفع يتبعت: compare.html?ids=a,b,c
    ========================================================= */
 (function () {
@@ -24,6 +25,16 @@
   const yesNo = (v) => (v ? `<span class="cmp-yes">${ICONS.check}${esc(t("cmp_yes"))}</span>` : `<span class="cmp-no">${esc(t("cmp_no"))}</span>`);
   const per = (l) => (l.purpose === "rent" ? ` <small>${esc(t("per_month"))}</small>` : "");
 
+  // حسابات الاستثمار (للمستثمر بس) — محفوظة لكل عقار عشان متتحسبش كذا مرة
+  const investor = canInvest(me);
+  const invCache = new Map();
+  function inv(l, key) {
+    if (!investor) return null;
+    if (!invCache.has(l.id)) invCache.set(l.id, Invest.quick(l));
+    const q = invCache.get(l.id);
+    return q ? q[key] : null;
+  }
+
   // نسبة تغيّر السعر من أول سعر (سالب = نزل، وده أحسن للمشتري)
   function trend(l) {
     const h = l.priceHistory || [];
@@ -39,8 +50,20 @@
       get: (l) => l.price, show: (v, l) => `${esc(fmtPrice(v))}${per(l)}` },
     { group: "price", key: "ppm", label: "cmp_ppm", better: "low", weight: 30, why: "why_ppm",
       get: (l) => (l.size ? l.price / l.size : null), show: (v) => `${esc(fmtNum(Math.round(v)))} <small>${esc(t("currency"))} / ${esc(t("sqm"))}</small>` },
+    // المشتري: العائد المكتوب في الإعلان بس. المستثمر عنده مجموعة "الاستثمار" كاملة تحت
     { group: "price", key: "yield", label: "cmp_yield", better: "high", weight: 6, why: "why_yield",
-      get: (l) => (l.purpose === "sale" && l.yield ? l.yield : null), show: (v) => `${esc(v)}%` },
+      get: (l) => (!investor && l.purpose === "sale" && l.yield ? l.yield : null), show: (v) => `${esc(v)}%` },
+    // للمستثمر بس — نفس معادلات حاسبة الاستثمار وبنفس الافتراضات
+    { group: "invest", key: "inv_rent", label: "inv_rent_month",
+      get: (l) => inv(l, "rent"), show: (v) => esc(fmtPrice(v)) },
+    { group: "invest", key: "inv_gross", label: "inv_gross", better: "high", weight: 4,
+      get: (l) => inv(l, "gross"), show: (v) => esc(Invest.fmtPct(v)) },
+    { group: "invest", key: "inv_net", label: "inv_net", better: "high", weight: 12, why: "why_net",
+      get: (l) => inv(l, "net"), show: (v) => esc(Invest.fmtPct(v)) },
+    { group: "invest", key: "inv_payback", label: "inv_payback", better: "low", weight: 8, why: "why_payback",
+      get: (l) => inv(l, "payback"), show: (v) => esc(Invest.fmtYears(v)) },
+    { group: "invest", key: "inv_roi", label: "inv_roi_n", better: "high", weight: 10, why: "why_roi",
+      get: (l) => inv(l, "roi"), show: (v) => esc(Invest.fmtPct(v)) },
     { group: "price", key: "trend", label: "cmp_trend", better: "low", weight: 4, why: "why_trend",
       get: (l) => trend(l),
       show: (v) => (v === 0 ? `<span class="cmp-muted">${esc(t("cmp_unchanged"))}</span>`
@@ -66,7 +89,7 @@
       get: (l) => (hasPrefs(me) ? Math.round(matchScore(l, me.prefs) * 100) : null), show: (v) => `${esc(v)}%` },
     { group: "you", key: "listed", label: "cmp_listed", get: (l) => l.createdAt, show: (v) => esc(fmtDate(v)) },
   ];
-  const GROUPS = [["price", "cmp_group_price"], ["space", "cmp_group_space"], ["place", "cmp_group_place"], ["trust", "cmp_group_trust"], ["you", "cmp_group_you"]];
+  const GROUPS = [["price", "cmp_group_price"], ["invest", "cmp_group_invest"], ["space", "cmp_group_space"], ["place", "cmp_group_place"], ["trust", "cmp_group_trust"], ["you", "cmp_group_you"]];
 
   /* --- الحساب: لكل مقياس، مين الأفضل، ودرجة كل عقار من 0 لـ 1 --- */
   function analyze(list) {
@@ -105,6 +128,7 @@
 
   /* --- الرسم --- */
   function render() {
+    invCache.clear(); // السعر ممكن يكون اتغيّر
     const list = Compare.ids().map((id) => Listings.get(id)).filter(Boolean);
     const purpose = list[0] ? list[0].purpose : "sale";
     $("cmpActions").innerHTML = list.length
@@ -199,7 +223,7 @@
             <tbody>${body}</tbody>
           </table>
         </div>
-        <p class="hint cmp-note">${esc(t("compare_note"))}${hasPrefs(me) ? "" : ` <a href="preferences.html">${esc(t("compare_prefs_tip"))}</a>`}</p>
+        <p class="hint cmp-note">${esc(t("compare_note"))}${investor && purpose === "sale" ? ` ${esc(t("cmp_note_invest", { y: Invest.DEFAULTS.years }))} <a href="invest.html">${esc(t("inv_open"))}</a>` : ""}${hasPrefs(me) ? "" : ` <a href="preferences.html">${esc(t("compare_prefs_tip"))}</a>`}</p>
       </section>`;
   }
 
