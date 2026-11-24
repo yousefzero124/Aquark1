@@ -997,14 +997,8 @@ function renderFooter() {
           <div>
             ${brandHTML(true)}
             <p>${esc(t("footer_about"))}</p>
-            <!-- حط روابط صفحاتك الحقيقية بدل # -->
-            <div class="socials">
-              <a href="#" aria-label="Facebook">${ICONS.facebook}</a>
-              <a href="#" aria-label="Instagram">${ICONS.instagram}</a>
-              <a href="#" aria-label="X">${ICONS.xTwitter}</a>
-              <a href="#" aria-label="TikTok">${ICONS.tiktok}</a>
-              <a href="#" aria-label="WhatsApp">${ICONS.whatsapp}</a>
-            </div>
+            <!-- أيقونات السوشيال ميديا اتشالت لحد ما يبقى فيه صفحات حقيقية.
+                 لما تعملها: رجّع <div class="socials"> بلينكاتها (الأيقونات موجودة في ICONS والستايل في style.css) -->
           </div>
           <div>
             <h4>${esc(t("footer_links"))}</h4>
