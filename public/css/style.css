@@ -2215,6 +2215,8 @@ input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
   padding-top: 60px;
 }
 .site-footer .brand-name { color: #fff; }
+/* اللوجو في الفوتر على قد مقاسه، فبيبدأ من نفس ناحية الكلام اللي تحته (يمين في العربي) */
+.site-footer .brand { width: fit-content; }
 .site-footer h4 { color: #fff; }
 .site-footer p { color: var(--on-black); }
 .site-footer ul a { color: var(--on-black); transition: color .2s; }
