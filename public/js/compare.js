@@ -5,19 +5,19 @@
      الصور والجولات، نزول السعر، ومدى مناسبته لتفضيلات المستخدم)
    - "الأنسب في المقارنة دي" + أسباب الاختيار
    - المستثمر: مجموعة "الاستثمار" (العائد الإجمالي والصافي، الاسترداد، ROI) من Invest في main.js
-   - اللينك ينفع يتبعت: compare.html?ids=a,b,c
+   - اللينك ينفع يتبعت: compare?ids=a,b,c
    ========================================================= */
 (function () {
   const $ = (id) => document.getElementById(id);
   const me = Auth.current();
   if (!me) return;
-  if (!canCompare(me)) { location.replace("index.html"); return; } // المقارنة للمشتري والمستثمر بس
+  if (!canCompare(me)) { location.replace("/"); return; } // المقارنة للمشتري والمستثمر بس
 
   // لينك مقارنة متبعت من حد → نحطه في قايمة المقارنة
   const urlIds = (new URLSearchParams(location.search).get("ids") || "").split(",").map((s) => s.trim()).filter(Boolean);
   if (urlIds.length) {
     try { Store.set(Compare.KEY, urlIds.slice(0, Compare.MAX)); } catch (e) { /* ignore */ }
-    history.replaceState(null, "", "compare.html");
+    history.replaceState(null, "", "compare");
   }
 
   const locale = Lang.get() === "ar" ? "ar-EG-u-nu-latn" : "en-US";
@@ -132,7 +132,7 @@
     const list = Compare.ids().map((id) => Listings.get(id)).filter(Boolean);
     const purpose = list[0] ? list[0].purpose : "sale";
     $("cmpActions").innerHTML = list.length
-      ? `<a class="btn btn-outline" href="properties.html?mode=${purpose === "rent" ? "rent" : "buy"}">${ICONS.plus}<span>${esc(t("compare_more"))}</span></a>
+      ? `<a class="btn btn-outline" href="properties?mode=${purpose === "rent" ? "rent" : "buy"}">${ICONS.plus}<span>${esc(t("compare_more"))}</span></a>
          ${list.length > 1 ? `<button type="button" class="btn btn-outline" data-cmp-share>${ICONS.share}<span>${esc(t("compare_share"))}</span></button>` : ""}
          <button type="button" class="btn btn-ghost" data-cmp-clear>${esc(t("compare_clear"))}</button>`
       : "";
@@ -144,7 +144,7 @@
           <h2>${esc(t("compare_empty_title"))}</h2>
           <p>${esc(t("compare_empty_sub"))}</p>
           ${list.length === 1 ? `<div class="cmp-empty-one">${propCard(list[0])}</div>` : ""}
-          <a class="btn btn-primary" href="properties.html?mode=${purpose === "rent" ? "rent" : "buy"}">${ICONS.search}<span>${esc(t("browse_props"))}</span></a>
+          <a class="btn btn-primary" href="properties?mode=${purpose === "rent" ? "rent" : "buy"}">${ICONS.search}<span>${esc(t("browse_props"))}</span></a>
         </div>`;
       return;
     }
@@ -223,14 +223,14 @@
             <tbody>${body}</tbody>
           </table>
         </div>
-        <p class="hint cmp-note">${esc(t("compare_note"))}${investor && purpose === "sale" ? ` ${esc(t("cmp_note_invest", { y: Invest.DEFAULTS.years }))}` : ""}${hasPrefs(me) ? "" : ` <a href="preferences.html">${esc(t("compare_prefs_tip"))}</a>`}</p>
+        <p class="hint cmp-note">${esc(t("compare_note"))}${investor && purpose === "sale" ? ` ${esc(t("cmp_note_invest", { y: Invest.DEFAULTS.years }))}` : ""}${hasPrefs(me) ? "" : ` <a href="preferences">${esc(t("compare_prefs_tip"))}</a>`}</p>
       </section>`;
   }
 
   /* --- أحداث --- */
   document.addEventListener("click", async (e) => {
     if (e.target.closest("[data-cmp-share]")) {
-      const url = `${location.origin}${location.pathname.replace(/[^/]*$/, "")}compare.html?ids=${encodeURIComponent(Compare.ids().join(","))}`;
+      const url = `${location.origin}${location.pathname.replace(/[^/]*$/, "")}compare?ids=${encodeURIComponent(Compare.ids().join(","))}`;
       try { await navigator.clipboard.writeText(url); toast(t("compare_copied"), "success"); }
       catch (err) { prompt(t("compare_share"), url); }
     }

@@ -50,6 +50,8 @@ const TABLES = {
   },
   messages: { pk: ["id"], index: ["conversation_id"], cols: { id: "TEXT", conversation_id: "TEXT NOT NULL", sender_id: "TEXT NOT NULL", body: "TEXT NOT NULL", created_at: "TIMESTAMPTZ" } },
   saved_searches: { pk: ["id"], index: ["user_id"], cols: { id: "TEXT", user_id: "TEXT NOT NULL", name: "TEXT", criteria: "JSONB", created_at: "TIMESTAMPTZ" } },
+  // عدّاد المحاولات (حماية من التخمين والسبام) — مشترك بين كل نسخ السيرفر على Vercel
+  rate_limits: { pk: ["key"], cols: { key: "TEXT", n: "INT NOT NULL", reset_at: "BIGINT NOT NULL" } },
 };
 
 function spec(table) {
@@ -213,6 +215,23 @@ function fileStore() {
       return rows.map((r) => normalize(table, r));
     },
     async get(table, where) { return (await this.find(table, where, { limit: 1 }))[0] || null; },
+
+    /* --- عدّاد المحاولات: بيزوّد العدّاد ويرجّع العدد في الفترة الحالية --- */
+    async hit(key, windowMs) {
+      const db = load();
+      const t = Date.now();
+      const rows = db.tables.rate_limits = db.tables.rate_limits.filter((r) => r.reset_at > t); // امسح القديم
+      let r = rows.find((x) => x.key === key);
+      if (!r) { r = { key, n: 0, reset_at: t + windowMs }; rows.push(r); }
+      r.n += 1;
+      save(db);
+      return r.n;
+    },
+    async clearHits(key) {
+      const db = load();
+      db.tables.rate_limits = db.tables.rate_limits.filter((r) => r.key !== key);
+      save(db);
+    },
   };
 }
 
@@ -377,6 +396,22 @@ async function buildPg(q) {
       return r.map((x) => normalize(table, x));
     },
     async get(table, where) { return (await this.find(table, where, { limit: 1 }))[0] || null; },
+
+    /* --- عدّاد المحاولات (عملية واحدة في قاعدة البيانات، فمفيش سباق بين الطلبات) --- */
+    async hit(key, windowMs) {
+      const t = Date.now();
+      const r = await q(
+        `INSERT INTO rate_limits (key, n, reset_at) VALUES ($1, 1, $2)
+         ON CONFLICT (key) DO UPDATE SET
+           n = CASE WHEN rate_limits.reset_at < $3 THEN 1 ELSE rate_limits.n + 1 END,
+           reset_at = CASE WHEN rate_limits.reset_at < $3 THEN EXCLUDED.reset_at ELSE rate_limits.reset_at END
+         RETURNING n`,
+        [key, t + windowMs, t]
+      );
+      if (Math.random() < 0.02) q("DELETE FROM rate_limits WHERE reset_at < $1", [t]).catch(() => {}); // تنضيف من وقت للتاني
+      return Number(r[0].n);
+    },
+    async clearHits(key) { await q("DELETE FROM rate_limits WHERE key = $1", [key]); },
   };
 }
 

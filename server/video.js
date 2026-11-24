@@ -26,14 +26,25 @@ function mode() {
   return IS_VERCEL ? "off" : "local";
 }
 
-/** بيتأكد إن لينك الفيديو من مصدر مسموح، ويرجّعه (أو null) */
-function clean(v, fail) {
+// كل فيديو مربوط بصاحبه: على Blob اسمه بيبدأ بـ videos/<id المستخدم>، وعلى الجهاز بـ v_<بصمة المستخدم>
+const ownerTag = (userId) => crypto.createHash("sha256").update(String(userId)).digest("hex").slice(0, 10);
+const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function ownedBy(v, userId) {
+  if (BLOB_RE.test(v)) return new RegExp(`/videos/${escRe(userId)}[-.]`).test(v);
+  const m = v.match(LOCAL_RE);
+  return !!m && m[1].startsWith(`v_${ownerTag(userId)}`);
+}
+
+/** بيتأكد إن لينك الفيديو من مصدر مسموح وإنه بتاع المستخدم ده (owners = ids مسموحة)، ويرجّعه (أو null) */
+function clean(v, fail, owners = []) {
   if (v == null || v === "") return null;
   if (typeof v !== "string" || v.length > 400) fail(400, "err_video");
-  if (YT_RE.test(v) || BLOB_RE.test(v)) return v;
-  const m = v.match(LOCAL_RE);
-  if (m && fs.existsSync(path.join(VIDEO_DIR, m[1]))) return v;
-  return fail(400, "err_video");
+  if (YT_RE.test(v)) return v;
+  const ok = BLOB_RE.test(v) || (() => { const m = v.match(LOCAL_RE); return m && fs.existsSync(path.join(VIDEO_DIR, m[1])); })();
+  if (!ok) return fail(400, "err_video");
+  // محدش يقدر يحط (وبعدين يمسح) فيديو حد تاني
+  if (!owners.filter(Boolean).some((id) => ownedBy(v, id))) return fail(403, "err_video");
+  return v;
 }
 
 /** شكل الفيديو اللي بيروح للموقع */
@@ -57,14 +68,14 @@ async function remove(v) {
 }
 
 /** على الجهاز: استقبال الفيديو (الطلب نفسه هو الملف) وحفظه */
-function saveLocal(req, fail) {
+function saveLocal(req, fail, userId) {
   const type = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
   const ext = TYPES[type];
   if (!ext) fail(415, "err_video_type");
   const declared = Number(req.headers["content-length"] || 0);
   if (declared > MAX_BYTES) fail(413, "err_video_big");
   fs.mkdirSync(VIDEO_DIR, { recursive: true });
-  const name = `v_${Date.now().toString(36)}${crypto.randomBytes(5).toString("hex")}.${ext}`;
+  const name = `v_${ownerTag(userId)}${Date.now().toString(36)}${crypto.randomBytes(5).toString("hex")}.${ext}`;
   const file = path.join(VIDEO_DIR, name);
   return new Promise((resolve, reject) => {
     const out = fs.createWriteStream(file);
@@ -128,7 +139,8 @@ async function blobToken(req, body, userId) {
     body,
     request: req,
     onBeforeGenerateToken: async (pathname) => {
-      if (!/^videos\/[A-Za-z0-9._-]{1,100}$/.test(pathname)) throw new Error("Invalid pathname");
+      // الاسم لازم يبدأ بـ id صاحبه (videos/<id>.mp4) عشان نعرف الفيديو بتاع مين
+      if (!/^videos\/[A-Za-z0-9._-]{1,100}$/.test(pathname) || !pathname.startsWith(`videos/${userId}.`)) throw new Error("Invalid pathname");
       return {
         allowedContentTypes: Object.keys(TYPES),
         maximumSizeInBytes: MAX_BYTES,

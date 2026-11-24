@@ -17,8 +17,8 @@
         <h2>${esc(t("admin_only_title"))}</h2>
         <p>${esc(t("admin_only_text"))}</p>
         <div class="actions">
-          ${me ? `<a class="btn btn-primary" href="index.html">${esc(t("nav_home"))}</a>`
-               : `<a class="btn btn-primary" href="auth.html?next=admin.html#login">${esc(t("login"))}</a>`}
+          ${me ? `<a class="btn btn-primary" href="/">${esc(t("nav_home"))}</a>`
+               : `<a class="btn btn-primary" href="auth?next=admin#login">${esc(t("login"))}</a>`}
         </div>
       </div>`;
     return;
@@ -175,7 +175,7 @@
       <dt>${esc(t("q_types"))}</dt><dd>${esc((p.types || []).map(typeName).join(SEP) || "—")}</dd>
       <dt>${esc(t("q_cities"))}</dt><dd>${esc((p.cities || []).map(cityName).join(SEP) || "—")}</dd>
       <dt>${esc(t("q_budget"))}</dt><dd>${esc(budget)}</dd>
-      <dt>${esc(t("q_beds"))}</dt><dd>${p.beds ? `${p.beds}+` : esc(t("any_beds"))}</dd>
+      <dt>${esc(t("q_beds"))}</dt><dd>${p.beds ? `${esc(p.beds)}+` : esc(t("any_beds"))}</dd>
     </dl>`;
   }
 
@@ -289,7 +289,7 @@
         </div></td>
         <td><div class="row-actions">
           <button type="button" class="btn btn-outline btn-sm" data-prop-id="${esc(l.id)}">${esc(t("view"))}</button>
-          ${seed ? "" : `<a class="btn btn-outline btn-sm" href="sell.html?edit=${encodeURIComponent(l.id)}&next=admin.html%23listings">${ICONS.edit}<span>${esc(t("edit"))}</span></a>`}
+          ${seed ? "" : `<a class="btn btn-outline btn-sm" href="sell?edit=${encodeURIComponent(l.id)}&next=admin%23listings">${ICONS.edit}<span>${esc(t("edit"))}</span></a>`}
           <button type="button" class="btn btn-outline btn-sm" data-verify="${esc(l.id)}">${esc(t(verified ? "unverify" : "verify"))}</button>
           <button type="button" class="btn btn-outline btn-sm" data-feature="${esc(l.id)}">${esc(t(featured ? "unfeature" : "feature"))}</button>
           <button type="button" class="btn btn-outline btn-sm" data-hide="${esc(l.id)}">${esc(t(hidden ? "show" : "hide"))}</button>

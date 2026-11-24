@@ -44,7 +44,7 @@
       const user = Auth.current();
       const params = new URLSearchParams(location.search);
       const next = safeNext(params.get("next"));
-      if (!user) { location.replace("auth.html?next=preferences.html#login"); return; }
+      if (!user) { location.replace("auth?next=preferences#login"); return; }
       if (params.get("welcome") !== "1") document.getElementById("stepper").classList.add("hidden");
 
       const hello = document.getElementById("prefsHello");

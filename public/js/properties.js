@@ -112,7 +112,7 @@
     $("fType").value = state.type;
     document.querySelectorAll(".main-nav a").forEach((a) => {
       const href = a.getAttribute("href");
-      a.classList.toggle("active", !state.favs && href === `properties.html?mode=${state.mode}`);
+      a.classList.toggle("active", !state.favs && href === `properties?mode=${state.mode}`);
     });
 
     const list = filtered();

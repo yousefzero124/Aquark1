@@ -51,8 +51,9 @@ function matchScore(l, prefs) {
     if ((prefs.purpose === "buy" ? "sale" : "rent") !== l.purpose) return 0;
     score += 2; max += 2;
   }
-  if (prefs.types && prefs.types.length) { max += 3; if (prefs.types.includes(l.type)) score += 3; }
-  if (prefs.cities && prefs.cities.length) { max += 3; if (prefs.cities.includes(l.city)) score += 3; }
+  // Array.isArray: تفضيلات قديمة متخزّنة بشكل غلط متوقّعش نشر الإعلانات
+  if (Array.isArray(prefs.types) && prefs.types.length) { max += 3; if (prefs.types.includes(l.type)) score += 3; }
+  if (Array.isArray(prefs.cities) && prefs.cities.length) { max += 3; if (prefs.cities.includes(l.city)) score += 3; }
   const budgetApplies = prefs.purpose !== "both" || l.purpose === "sale";
   if (budgetApplies && (prefs.budgetMin || prefs.budgetMax)) {
     max += 2;
@@ -187,13 +188,14 @@ module.exports = function features(h) {
     const [users, searches] = await Promise.all([store.listUsers(), store.find("saved_searches")]);
     const done = new Set([l.owner_id]);
     const vars = { title: l.title, area: l.city, price: l.price, purpose: l.purpose };
+    const safe = (fn) => { try { return fn(); } catch (e) { return false; } }; // بيانات واحد بايظة متوقّعش الباقي
     for (const s of searches) {
-      if (done.has(s.user_id) || !matchesSearch(l, s.criteria || {})) continue;
+      if (done.has(s.user_id) || !safe(() => matchesSearch(l, s.criteria || {}))) continue;
       done.add(s.user_id);
       await notify(store, s.user_id, "search_match", { ...vars, name: s.name }, l.id);
     }
     for (const u of users) {
-      if (done.has(u.id) || !u.prefs || matchScore(l, u.prefs) < 0.75) continue;
+      if (done.has(u.id) || !u.prefs || safe(() => matchScore(l, u.prefs)) < 0.75) continue;
       done.add(u.id);
       await notify(store, u.id, "match", vars, l.id);
     }
@@ -268,11 +270,11 @@ module.exports = function features(h) {
     async "POST /api/listings"({ req, body, store }) {
       const me = await requireUser(req, store);
       if (!POSTER_ROLES.includes(me.role)) fail(403, "err_forbidden");
-      limit(`listing:${me.id}`, 30, 60 * 60 * 1000);
+      await limit(`listing:${me.id}`, 30, 60 * 60 * 1000);
       const fields = cleanListing(body);
       const images = (Array.isArray(body.images) ? body.images : []).slice(0, MAX_IMAGES).map((x) => cleanImage(x, MAX_IMAGE_CHARS));
       const pano = body.pano ? cleanImage(body.pano, MAX_PANO_CHARS) : null;
-      const videoUrl = video.clean(body.video, fail);
+      const videoUrl = video.clean(body.video, fail, [me.id]);
       const id = newId("l");
       const t = now();
       const row = await store.insert("listings", {
@@ -302,7 +304,7 @@ module.exports = function features(h) {
     async "PUT /api/listings/:id"({ req, body, store, params }) {
       const me = await requireUser(req, store);
       const l = await ownListing(store, me, params.id);
-      limit(`listing-edit:${me.id}`, 60, 60 * 60 * 1000);
+      await limit(`listing-edit:${me.id}`, 60, 60 * 60 * 1000);
       const fields = cleanListing(body);
       const patch = { ...fields, updated_at: now(), media_v: Date.now().toString(36) };
       delete patch.price; // السعر بيتغيّر تحت عشان يتسجل في سجل السعر
@@ -327,7 +329,7 @@ module.exports = function features(h) {
         patch.has_pano = true;
       }
       if (body.video !== undefined && body.video !== "keep") {
-        const nextVideo = video.clean(body.video, fail);
+        const nextVideo = video.clean(body.video, fail, [l.owner_id, me.id]);
         if (nextVideo !== l.video_url) {
           if (l.video_url) await video.remove(l.video_url);
           patch.video_url = nextVideo;
@@ -388,13 +390,14 @@ module.exports = function features(h) {
     },
     async "POST /api/favorites/:id"({ req, store, params }) {
       const me = await requireUser(req, store);
-      limit(`fav:${me.id}`, 120, 60 * 1000);
+      await limit(`fav:${me.id}`, 120, 60 * 1000);
       const found = await listingExists(store, params.id);
       if (!found) fail(404, "err_not_found");
       const had = await store.get("favorites", { user_id: me.id, listing_id: params.id });
       if (!had) {
         await store.upsert("favorites", { user_id: me.id, listing_id: params.id, created_at: now() });
-        if (!found.seed && found.listing.owner_id !== me.id) {
+        // إشعار واحد بس لكل شخص على نفس العقار في اليوم (عشان محدش يغرق صاحب الإعلان بالضغط على القلب)
+        if (!found.seed && found.listing.owner_id !== me.id && (await store.hit(`favn:${me.id}:${params.id}`, 864e5)) === 1) {
           await notify(store, found.listing.owner_id, "fav", { title: found.listing.title }, params.id);
         }
       }
@@ -436,7 +439,7 @@ module.exports = function features(h) {
     },
     async "POST /api/chats"({ req, body, store }) {
       const me = await requireUser(req, store);
-      limit(`chatnew:${me.id}`, 30, 60 * 60 * 1000);
+      await limit(`chatnew:${me.id}`, 30, 60 * 60 * 1000);
       const id = String(body.listingId || "");
       if (SEED_RE.test(id)) fail(400, "err_chat_demo");
       const l = await store.get("listings", { id });
@@ -460,7 +463,7 @@ module.exports = function features(h) {
       const after = query.get("after");
       let msgs = await store.find("messages", { conversation_id: c.id }, { order: "created_at ASC" });
       if (after) msgs = msgs.filter((m) => m.created_at > after);
-      else msgs = msgs.slice(-200);
+      msgs = msgs.slice(-200); // آخر 200 رسالة بس في المرة الواحدة
       // اتقرت (بنكتب في قاعدة البيانات بس لو فيه رسايل جديدة فعلاً)
       let fresh = c;
       if (publicChat(c, me).unread) {
@@ -471,7 +474,7 @@ module.exports = function features(h) {
     },
     async "POST /api/chats/:id/messages"({ req, body, store, params }) {
       const me = await requireUser(req, store);
-      limit(`msg:${me.id}`, 40, 60 * 1000);
+      await limit(`msg:${me.id}`, 40, 60 * 1000);
       const c = await chatFor(store, me, params.id);
       const text = str(body.body, 2000);
       if (!text) fail(400, "err_msg_empty");
@@ -512,7 +515,7 @@ module.exports = function features(h) {
       const me = await requireUser(req, store);
       if (!POSTER_ROLES.includes(me.role)) fail(403, "err_forbidden");
       if (video.mode() !== "blob") fail(503, "err_video_unavailable");
-      limit(`blob:${me.id}`, 30, 60 * 60 * 1000);
+      await limit(`blob:${me.id}`, 30, 60 * 60 * 1000);
       try { return await video.blobToken(req, body, me.id); } catch (e) { return fail(400, "err_video"); }
     },
     // على الجهاز بس: الطلب نفسه هو ملف الفيديو (مش JSON)
@@ -520,8 +523,8 @@ module.exports = function features(h) {
       const me = await requireUser(req, store);
       if (!POSTER_ROLES.includes(me.role)) fail(403, "err_forbidden");
       if (video.mode() !== "local") fail(503, "err_video_unavailable");
-      limit(`video:${me.id}`, 30, 60 * 60 * 1000);
-      return { status: 201, data: await video.saveLocal(req, fail) };
+      await limit(`video:${me.id}`, 30, 60 * 60 * 1000);
+      return { status: 201, data: await video.saveLocal(req, fail, me.id) };
     },
     async "GET /api/video/:file"({ req, res, params }) {
       if (!video.serveLocal(req, res, params.file)) fail(404, "err_not_found");

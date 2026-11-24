@@ -111,9 +111,21 @@ function typeName(key) { return TYPES[key] ? loc(TYPES[key]) : key; }
 function roleName(role) { return t(`role_${role}`); }
 function uid(prefix = "id") { return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`; }
 function safeNext(next) {
-  // يمنع التحويل لمواقع خارجية بعد تسجيل الدخول
-  if (!next || /^(?:[a-z]+:)?\/\//i.test(next) || next.includes(":")) return "index.html";
-  return next;
+  // يمنع التحويل لمواقع خارجية بعد تسجيل الدخول (حتى الحيل زي /\evil.com أو /%09/evil.com)
+  if (!next || typeof next !== "string" || /[\\\s\u0000-\u001f]/.test(next) || /%(?:5c|09|0a|0d|00)/i.test(next)) return "/";
+  try {
+    const u = new URL(next, location.href);
+    if (u.origin !== location.origin || !/^https?:$/.test(u.protocol)) return "/";
+    return u.pathname + u.search + u.hash;
+  } catch (e) { return "/"; }
+}
+/** نفس قواعد السيرفر: 8 حروف على الأقل، فيها حرف ورقم، ومش من الباسوردات المشهورة. بيرجع مفتاح الخطأ أو null */
+const COMMON_PASSWORDS = ["password", "password1", "password123", "12345678", "123456789", "1234567890", "qwerty123", "abc12345", "abcd1234", "1q2w3e4r", "iloveyou", "admin123", "passw0rd", "a1234567", "aa123456"];
+function passwordProblem(p) {
+  if (typeof p !== "string" || p.length < 8 || p.length > 200) return "err_pass_len";
+  if (!/[a-z؀-ۿ]/i.test(p) || !/\d/.test(p)) return "err_pass_weak";
+  if (COMMON_PASSWORDS.includes(p.toLowerCase())) return "err_pass_common";
+  return null;
 }
 function imgFail(el) {
   const div = document.createElement("div");
@@ -593,7 +605,7 @@ function renderCompareTray() {
       <div class="cmp-slots">${slots}</div>
       <div class="cmp-actions">
         <button type="button" class="btn btn-ghost btn-sm" data-cmp-clear>${esc(t("compare_clear"))}</button>
-        <a class="btn btn-primary btn-sm${ids.length < 2 ? " disabled" : ""}" href="compare.html" ${ids.length < 2 ? 'aria-disabled="true" tabindex="-1"' : ""}>${ICONS.compare}<span>${esc(t("compare_now"))}</span></a>
+        <a class="btn btn-primary btn-sm${ids.length < 2 ? " disabled" : ""}" href="compare" ${ids.length < 2 ? 'aria-disabled="true" tabindex="-1"' : ""}>${ICONS.compare}<span>${esc(t("compare_now"))}</span></a>
       </div>
     </div>`;
 }
@@ -621,10 +633,10 @@ function refreshFavButtons() {
    الإشعار بيتخزن كـ "نوع + بيانات" مش كنص، عشان يتعرض بالعربي أو الإنجليزي حسب اللغة.
    بيتجددوا من السيرفر كل شوية (Notifs.sync) ومعاهم عدد المحادثات اللي فيها رسايل جديدة. */
 const NOTIF_KINDS = {
-  welcome:      { icon: "house",     tone: "yellow", link: "index.html" },
-  prefs_tip:    { icon: "sliders",   tone: "yellow", link: "preferences.html" },
+  welcome:      { icon: "house",     tone: "yellow", link: "/" },
+  prefs_tip:    { icon: "sliders",   tone: "yellow", link: "preferences" },
   match:        { icon: "star",      tone: "yellow" },
-  search_match: { icon: "bellRing",  tone: "yellow", link: "properties.html" },
+  search_match: { icon: "bellRing",  tone: "yellow", link: "properties" },
   price_drop:   { icon: "priceDown", tone: "green" },
   published:    { icon: "check",     tone: "green" },
   verified:     { icon: "shield",    tone: "green" },
@@ -632,8 +644,8 @@ const NOTIF_KINDS = {
   hidden:       { icon: "eyeOff",    tone: "red" },
   shown:        { icon: "eye",       tone: "green" },
   fav:          { icon: "heart",     tone: "red" },
-  role:         { icon: "user",      tone: "blue", link: "settings.html#profile" },
-  password:     { icon: "lock",      tone: "blue", link: "settings.html#security" },
+  role:         { icon: "user",      tone: "blue", link: "settings#profile" },
+  password:     { icon: "lock",      tone: "blue", link: "settings#security" },
 };
 const Notifs = {
   data: Store.get("aqarak_notifs_cache", null) || { list: [], unread: 0, chats: 0 },
@@ -738,7 +750,7 @@ function openModal(html, { size = "" } = {}) {
 function brandHTML(light = true) {
   // اللوجو: الرمز (assets/logo-mark.svg) + اسم الموقع كنص (عقارك / Aqarak)
   // light = النسخة الفاتحة للخلفيات السودا (الفوتر)
-  return `<a href="index.html" class="brand" aria-label="${esc(t("brand"))}">
+  return `<a href="/" class="brand" aria-label="${esc(t("brand"))}">
       <img class="brand-logo" src="assets/${light ? "logo-mark-light" : "logo-mark"}.svg" alt="" width="58" height="41">
       <span class="brand-name">${esc(t("brand"))}</span>
     </a>`;
@@ -920,7 +932,7 @@ function renderHeader() {
     const unread = Notifs.unread();
     const chatsN = Notifs.chatsUnread();
     actions = `
-      <a href="messages.html" class="fav-link chat-link${chatsN ? " has-unread" : ""} ${page === "messages" ? "active" : ""}" id="chatLink"
+      <a href="messages" class="fav-link chat-link${chatsN ? " has-unread" : ""} ${page === "messages" ? "active" : ""}" id="chatLink"
          aria-label="${esc(t("messages"))}${chatsN ? ` (${chatsN})` : ""}" title="${esc(t("messages"))}">
         ${ICONS.message}
         <span class="notif-count${chatsN ? "" : " hidden"}" id="chatCount">${chatsN > 99 ? "99+" : chatsN}</span>
@@ -933,7 +945,7 @@ function renderHeader() {
         </button>
         <div class="notif-panel" id="notifPanel" role="dialog" aria-label="${esc(t("notifs"))}"></div>
       </div>
-      <a href="properties.html?favs=1" class="fav-link${favN ? " has-favs" : ""} ${page === "props" && favsOnly ? "active" : ""}" id="favLink"
+      <a href="properties?favs=1" class="fav-link${favN ? " has-favs" : ""} ${page === "props" && favsOnly ? "active" : ""}" id="favLink"
          aria-label="${esc(t("my_favs"))}${favN ? ` (${favN})` : ""}" title="${esc(t("my_favs"))}">
         ${ICONS.heart}
         <span class="fav-count${favN ? "" : " hidden"}" id="favCount">${favN > 99 ? "99+" : favN}</span>
@@ -948,19 +960,19 @@ function renderHeader() {
             <small>${esc(user.email)}</small><br>
             <span class="role-chip">${esc(roleName(user.role))}</span>
           </div>
-          ${isAdmin ? `<a href="admin.html">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>` : ""}
-          ${hasMine ? `<a href="dashboard.html">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>` : ""}          <a href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>
-          <a href="properties.html?favs=1">${ICONS.heart}<span>${esc(t("my_favs"))}</span></a>
-          <a href="settings.html#prefs">${ICONS.sliders}<span>${esc(t("tab_prefs"))}</span></a>
-          <a href="settings.html#profile">${ICONS.gear}<span>${esc(t("nav_settings"))}</span></a>
+          ${isAdmin ? `<a href="admin">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>` : ""}
+          ${hasMine ? `<a href="dashboard">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>` : ""}          <a href="messages">${ICONS.message}<span>${esc(t("messages"))}</span></a>
+          <a href="properties?favs=1">${ICONS.heart}<span>${esc(t("my_favs"))}</span></a>
+          <a href="settings#prefs">${ICONS.sliders}<span>${esc(t("tab_prefs"))}</span></a>
+          <a href="settings#profile">${ICONS.gear}<span>${esc(t("nav_settings"))}</span></a>
           <button type="button" class="logout" data-action="logout">${ICONS.logout}<span>${esc(t("logout"))}</span></button>
         </div>
       </div>`;
   } else {
     // الزوار (من غير حساب) بيشوفوا بس الدخول وإنشاء الحساب
     actions = `
-      <a href="auth.html#login" class="btn btn-ghost" data-tab="login">${esc(t("login"))}</a>
-      <a href="auth.html#signup" class="btn btn-primary btn-signup" data-tab="signup">${esc(t("signup"))}</a>`;
+      <a href="auth#login" class="btn btn-ghost" data-tab="login">${esc(t("login"))}</a>
+      <a href="auth#signup" class="btn btn-primary btn-signup" data-tab="signup">${esc(t("signup"))}</a>`;
   }
 
   host.outerHTML = `
@@ -969,11 +981,11 @@ function renderHeader() {
         ${brandHTML()}
         ${user ? `
         <nav class="main-nav" id="mainNav">
-          <a href="index.html" class="${active("home") ? "active" : ""}">${esc(t("nav_home"))}</a>
-          <a href="properties.html?mode=buy" class="${active("buy") ? "active" : ""}">${esc(t("nav_buy"))}</a>
-          <a href="properties.html?mode=rent" class="${active("rent") ? "active" : ""}">${esc(t("nav_rent"))}</a>
-          <a href="map.html" class="${active("map") ? "active" : ""}">${icon("map", "margin-inline-end:6px")}${esc(t("nav_map"))}</a>
-          <a href="sell.html" class="${active("sell") ? "active" : ""}">${esc(t("nav_sell"))}</a>
+          <a href="/" class="${active("home") ? "active" : ""}">${esc(t("nav_home"))}</a>
+          <a href="properties?mode=buy" class="${active("buy") ? "active" : ""}">${esc(t("nav_buy"))}</a>
+          <a href="properties?mode=rent" class="${active("rent") ? "active" : ""}">${esc(t("nav_rent"))}</a>
+          <a href="map" class="${active("map") ? "active" : ""}">${icon("map", "margin-inline-end:6px")}${esc(t("nav_map"))}</a>
+          <a href="sell" class="${active("sell") ? "active" : ""}">${esc(t("nav_sell"))}</a>
           <a href="#" class="nav-lang" data-action="lang">${icon("globe", "margin-inline-end:8px")}${esc(t("lang_switch"))}</a>
         </nav>` : ""}
         <div class="header-actions">
@@ -1001,18 +1013,18 @@ function renderFooter() {
           <div>
             <h4>${esc(t("footer_links"))}</h4>
             <ul>
-              <li><a href="properties.html?mode=buy">${esc(t("nav_buy"))}</a></li>
-              <li><a href="properties.html?mode=rent">${esc(t("nav_rent"))}</a></li>
-              <li><a href="map.html">${esc(t("nav_map"))}</a></li>
-              <li><a href="sell.html">${esc(t("nav_sell"))}</a></li>
+              <li><a href="properties?mode=buy">${esc(t("nav_buy"))}</a></li>
+              <li><a href="properties?mode=rent">${esc(t("nav_rent"))}</a></li>
+              <li><a href="map">${esc(t("nav_map"))}</a></li>
+              <li><a href="sell">${esc(t("nav_sell"))}</a></li>
             </ul>
           </div>
           <div>
             <h4>${esc(t("footer_contact"))}</h4>
             <ul class="contact-list">
               <li>${ICONS.pin}<span>${esc(loc(CITY_NAME))}</span></li>
-              <li>${ICONS.user}<a href="auth.html#signup">${esc(t("signup"))}</a></li>
-              <li>${ICONS.lock}<a href="auth.html#login">${esc(t("login"))}</a></li>
+              <li>${ICONS.user}<a href="auth#signup">${esc(t("signup"))}</a></li>
+              <li>${ICONS.lock}<a href="auth#login">${esc(t("login"))}</a></li>
             </ul>
           </div>
         </div>
@@ -1155,7 +1167,7 @@ function openDetails(id) {
         </div>
         <div class="inv-box-foot">
           <small>${esc(t("inv_rent_est", { v: fmtPrice(q.rent) }))} · ${esc(t(`inv_src_${q.rentSource}`))}<br>${esc(t("inv_assume", { y: q.years, g: Invest.DEFAULTS.growthPct }))}</small>
-          ${l.ownerId === user.id ? `<a class="btn btn-outline btn-sm" href="dashboard.html#calc=${encodeURIComponent(l.id)}">${ICONS.calc}<span>${esc(t("inv_open"))}</span></a>` : ""}
+          ${l.ownerId === user.id ? `<a class="btn btn-outline btn-sm" href="dashboard#calc=${encodeURIComponent(l.id)}">${ICONS.calc}<span>${esc(t("inv_open"))}</span></a>` : ""}
         </div>
       </div>`;
   }
@@ -1178,7 +1190,7 @@ function openDetails(id) {
   } else {
     contact = `
       <div style="text-align:center;color:var(--muted);font-weight:600">${icon("lock", "font-size:28px;display:block;margin:0 auto 8px;color:var(--yellow-dark)")}${esc(t("login_to_contact"))}</div>
-      <a class="btn btn-primary btn-block" href="auth.html?next=${encodeURIComponent(location.pathname.split("/").pop() + location.search)}#login">${esc(t("login"))}</a>`;
+      <a class="btn btn-primary btn-block" href="auth?next=${encodeURIComponent(location.pathname.split("/").pop() + location.search)}#login">${esc(t("login"))}</a>`;
   }
 
   const facts = [
@@ -1213,11 +1225,11 @@ function openDetails(id) {
           ${hasCoords(l) ? "" : `<small class="hint">${esc(t("location_approx"))}</small>`}
           <div class="btn-row" style="margin-top:10px">
             <a class="btn btn-outline btn-sm" href="${esc(googleMapsLink(coords[0], coords[1]))}" target="_blank" rel="noopener">${ICONS.external}<span>${esc(t("open_gmaps"))}</span></a>
-            <a class="btn btn-ghost btn-sm" href="map.html?focus=${encodeURIComponent(l.id)}">${ICONS.crosshairs}<span>${esc(t("nearby_on_map"))}</span></a>
+            <a class="btn btn-ghost btn-sm" href="map?focus=${encodeURIComponent(l.id)}">${ICONS.crosshairs}<span>${esc(t("nearby_on_map"))}</span></a>
           </div>` : ""}
         </div>
         <aside class="contact-card">
-          ${canEditListing(l, user) ? `<a class="btn btn-dark btn-block" href="sell.html?edit=${encodeURIComponent(l.id)}&next=${encodeURIComponent(location.pathname.split("/").pop() + location.search + location.hash)}">${ICONS.edit}${esc(t("edit_listing"))}</a>` : ""}
+          ${canEditListing(l, user) ? `<a class="btn btn-dark btn-block" href="sell?edit=${encodeURIComponent(l.id)}&next=${encodeURIComponent(location.pathname.split("/").pop() + location.search + location.hash)}">${ICONS.edit}${esc(t("edit_listing"))}</a>` : ""}
           ${contact}
           <button class="btn btn-ghost btn-block fav-text-btn ${fav ? "on" : ""}" type="button" data-fav-modal="${esc(l.id)}">
             ${ICONS.heart}
@@ -1253,7 +1265,7 @@ function openDetails(id) {
     chatStart.disabled = true;
     try {
       const { chat } = await Api.call("POST", "/api/chats", { listingId: l.id });
-      location.href = `messages.html?c=${encodeURIComponent(chat.id)}`;
+      location.href = `messages?c=${encodeURIComponent(chat.id)}`;
     } catch (err) {
       chatStart.disabled = false;
       toast(t(err.message), "error");
@@ -1508,7 +1520,7 @@ document.addEventListener("click", (e) => {
       action.disabled = true;
       Auth.logout().then(() => {
         sessionStorage.setItem("aqarak_flash", t("logged_out"));
-        location.href = "index.html";
+        location.href = "/";
       });
     }
     return;
@@ -1568,8 +1580,8 @@ if (!window.__aqarakRedirecting && document.body.dataset.page !== "auth") {
   }
   Auth.refresh().then((user) => {
     if (!user) {
-      const here = location.pathname.split("/").pop() || "index.html";
-      location.replace(`auth.html?next=${encodeURIComponent(here + location.search + location.hash)}#login`);
+      const here = location.pathname.split("/").pop() || "/";
+      location.replace(`auth?next=${encodeURIComponent(here + location.search + location.hash)}#login`);
     } else if (JSON.stringify(user) !== before) {
       location.reload(); // البيانات اتغيّرت من مكان تاني (جهاز تاني أو الأدمن) → اعرض الجديدة
     }

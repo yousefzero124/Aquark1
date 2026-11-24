@@ -8,7 +8,7 @@
   <script>
     (function () {
       var id = new URLSearchParams(location.search).get("id");
-      location.replace("dashboard.html#calc" + (id ? "=" + encodeURIComponent(id) : ""));
+      location.replace("dashboard#calc" + (id ? "=" + encodeURIComponent(id) : ""));
     })();
   </script>
 </head>

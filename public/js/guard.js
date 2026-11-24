@@ -9,8 +9,8 @@
   function toLogin() {
     window.__aqarakRedirecting = true;
     document.documentElement.style.visibility = "hidden";
-    var here = location.pathname.split("/").pop() || "index.html";
-    location.replace("auth.html?next=" + encodeURIComponent(here + location.search + location.hash) + "#login");
+    var here = location.pathname.split("/").pop() || "/";
+    location.replace("auth?next=" + encodeURIComponent(here + location.search + location.hash) + "#login");
   }
   try {
     var me = JSON.parse(localStorage.getItem("aqarak_me") || "null");

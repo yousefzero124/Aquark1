@@ -26,7 +26,7 @@
     const params = new URLSearchParams({ mode });
     if (citySel.value) params.set("city", citySel.value);
     if (typeSel.value) params.set("type", typeSel.value);
-    location.href = `properties.html?${params}`;
+    location.href = `properties?${params}`;
   });
 
   /* --- Hero video background --- */
@@ -56,7 +56,7 @@
   /* --- Categories --- */
   document.getElementById("categories").innerHTML = Object.keys(TYPES).map((k) => {
     const n = all.filter((l) => l.type === k).length;
-    return `<a class="cat-card" href="properties.html?mode=buy&type=${k}">
+    return `<a class="cat-card" href="properties?mode=buy&type=${k}">
         <span class="ico">${ICONS[TYPE_ICON[k]]}</span>
         <strong>${esc(typeName(k))}</strong>
         <small>${esc(t("count_props", { n }))}</small>
@@ -85,7 +85,7 @@
         <div class="prefs-cta">
           <span class="ico">${ICONS.sliders}</span>
           <div><h3>${esc(t("prefs_cta_title"))}</h3><p>${esc(t("prefs_cta_sub"))}</p></div>
-          <a class="btn btn-primary" href="preferences.html">${esc(t("prefs_cta_btn"))}</a>
+          <a class="btn btn-primary" href="preferences">${esc(t("prefs_cta_btn"))}</a>
         </div>`;
     }
   }
@@ -111,6 +111,6 @@
       <h3>${esc(roleName(r.key))}</h3>
       <p>${esc(t(`role_${r.key}_long`))}</p>
       <ul>${r.f.map((k) => `<li>${esc(t(k))}</li>`).join("")}</ul>
-      ${Auth.current() ? "" : `<a href="auth.html?role=${r.key}#signup" class="btn btn-outline btn-sm" style="margin-top:18px">${esc(t("start_as", { role: roleName(r.key) }))}</a>`}
+      ${Auth.current() ? "" : `<a href="auth?role=${r.key}#signup" class="btn btn-outline btn-sm" style="margin-top:18px">${esc(t("start_as", { role: roleName(r.key) }))}</a>`}
     </div>`).join("");
 })();

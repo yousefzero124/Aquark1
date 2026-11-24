@@ -1,15 +1,15 @@
 /* =========================================================
-   dashboard.html = "عقاراتي" — للبروكر والمستثمر بس
+   dashboard = "عقاراتي" — للبروكر والمستثمر بس
    العقارات اللي نزلها: مرات الحفظ، الرسايل، الحالة، تعديل / سعر / حذف
    المستثمر: تاب "حاسبة الاستثمار" (#calc) بيحسب على عقاراته هو (invest.js)
-   (الأدمن ليه "الداشبورد" في admin.html، والمشتري مالوش الصفحة دي)
+   (الأدمن ليه "الداشبورد" في admin، والمشتري مالوش الصفحة دي)
    ========================================================= */
 (function () {
   const $ = (id) => document.getElementById(id);
   const me = Auth.current();
   if (!me) return;
-  if (me.role === "admin") { location.replace("admin.html"); return; }
-  if (!["broker", "investor"].includes(me.role)) { location.replace("index.html"); return; }
+  if (me.role === "admin") { location.replace("admin"); return; }
+  if (!["broker", "investor"].includes(me.role)) { location.replace("/"); return; }
 
   const investor = canInvest(me);
   let stats = {}; // { listingId: { favorites, chats, unread } }
@@ -21,8 +21,8 @@
   $("dashSub").textContent = t("dash_sub_mine");
   $("dashKpis").classList.add("hidden");
   $("dashActions").innerHTML = `
-    <a class="btn btn-primary" href="sell.html">${ICONS.plus}<span>${esc(t("dash_add"))}</span></a>
-    <a class="btn btn-outline" href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>`;
+    <a class="btn btn-primary" href="sell">${ICONS.plus}<span>${esc(t("dash_add"))}</span></a>
+    <a class="btn btn-outline" href="messages">${ICONS.message}<span>${esc(t("messages"))}</span></a>`;
 
   /* --- مساعدات --- */
   const locale = Lang.get() === "ar" ? "ar-EG-u-nu-latn" : "en-US";
@@ -43,7 +43,7 @@
           <small>${esc(typeName(l.type))} · ${esc(cityName(l.city))} · ${esc(fmtDate(l.createdAt))}</small></div></div></td>
         <td class="nowrap">${esc(fmtPrice(l.price))}${l.purpose === "rent" ? ` <small class="muted">${esc(t("per_month"))}</small>` : ""}</td>
         <td class="nowrap"><span class="dash-count">${ICONS.heart}${fmtNum(s.favorites)}</span></td>
-        <td class="nowrap"><a class="dash-count" href="messages.html">${ICONS.message}${fmtNum(s.chats)}${s.unread ? ` <span class="badge-new">${fmtNum(s.unread)}</span>` : ""}</a></td>
+        <td class="nowrap"><a class="dash-count" href="messages">${ICONS.message}${fmtNum(s.chats)}${s.unread ? ` <span class="badge-new">${fmtNum(s.unread)}</span>` : ""}</a></td>
         <td><div class="chip-stack">
           <span class="status-chip ${hidden ? "off" : "on"}">${esc(t(hidden ? "st_hidden" : "st_visible"))}</span>
           ${Moderation.isVerified(l) ? `<span class="status-chip featured">${ICONS.verified}${esc(t("verified"))}</span>` : ""}
@@ -53,7 +53,7 @@
         </div></td>
         <td><div class="row-actions">
           <button type="button" class="btn btn-outline btn-sm" data-prop-id="${esc(l.id)}">${esc(t("view"))}</button>
-          <a class="btn btn-outline btn-sm" href="sell.html?edit=${encodeURIComponent(l.id)}&next=dashboard.html">${ICONS.edit}<span>${esc(t("edit"))}</span></a>
+          <a class="btn btn-outline btn-sm" href="sell?edit=${encodeURIComponent(l.id)}&next=dashboard">${ICONS.edit}<span>${esc(t("edit"))}</span></a>
           <button type="button" class="btn btn-outline btn-sm" data-price="${esc(l.id)}">${esc(t("edit_price"))}</button>
           ${investor && l.purpose === "sale" ? `<button type="button" class="btn btn-outline btn-sm" data-analyze="${esc(l.id)}">${ICONS.calc}<span>${esc(t("inv_analyze"))}</span></button>` : ""}
           <button type="button" class="btn btn-danger btn-sm" data-delete="${esc(l.id)}">${esc(t("delete"))}</button>
@@ -67,7 +67,7 @@
             <th>${esc(t("col_chats"))}</th><th>${esc(t("col_state"))}</th><th>${esc(t("col_actions"))}</th>
           </tr></thead><tbody>${rows}</tbody></table></div>`
       : `<div class="dash-empty"><p>${esc(t("dash_empty_mine"))}</p>
-          <a class="btn btn-primary btn-sm" href="sell.html">${ICONS.plus}<span>${esc(t("dash_add"))}</span></a></div>`;
+          <a class="btn btn-primary btn-sm" href="sell">${ICONS.plus}<span>${esc(t("dash_add"))}</span></a></div>`;
     $("dashBody").innerHTML = `
       <section class="card dash-sec" id="sec-listings">
         <div class="dash-sec-head"><h2>${ICONS.building}<span>${esc(`${t("my_listings")} (${fmtNum(mine.length)})`)}</span></h2></div>

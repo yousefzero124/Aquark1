@@ -49,7 +49,7 @@
           <span class="chat-empty-ico">${ICONS.message}</span>
           <strong>${esc(t("chat_none"))}</strong>
           <small>${esc(t("chat_none_sub"))}</small>
-          <a class="btn btn-primary btn-sm" href="properties.html?mode=buy">${esc(t("browse_props"))}</a>
+          <a class="btn btn-primary btn-sm" href="properties?mode=buy">${esc(t("browse_props"))}</a>
         </div>`;
   }
   async function loadList() {
@@ -91,7 +91,7 @@
 
   async function openThread(id) {
     activeId = id;
-    history.replaceState(null, "", `messages.html?c=${encodeURIComponent(id)}`);
+    history.replaceState(null, "", `messages?c=${encodeURIComponent(id)}`);
     $("chatShell").classList.add("thread-open");
     $("chatEmpty").classList.add("hidden");
     $("chatOpen").classList.remove("hidden");
@@ -109,7 +109,7 @@
   function closeThread() {
     activeId = null;
     clearInterval(threadTimer);
-    history.replaceState(null, "", "messages.html");
+    history.replaceState(null, "", "messages");
     $("chatShell").classList.remove("thread-open");
     $("chatEmpty").classList.remove("hidden");
     $("chatOpen").classList.add("hidden");

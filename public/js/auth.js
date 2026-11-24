@@ -3,7 +3,7 @@
    إنشاء الحساب على 3 خطوات:
      1) نوع الحساب (أدمن / مستثمر / بروكر / مشتري)
      2) البيانات الشخصية
-     3) التفضيلات (في صفحة preferences.html)
+     3) التفضيلات (في صفحة preferences)
    + تسجيل الدخول بـ Google
    ========================================================= */
 (function () {
@@ -203,7 +203,8 @@
     if (name.value.trim().length < 2) { mark(name); return showError(signupForm, "err_name"); }
     if (!googleProfile) {
       if (!EMAIL_RE.test(email.value.trim())) { mark(email); return showError(signupForm, "err_email"); }
-      if (pass.value.length < 6) { mark(pass); return showError(signupForm, "err_pass_len"); }
+      const passErr = passwordProblem(pass.value);
+      if (passErr) { mark(pass); return showError(signupForm, passErr); }
       if (pass.value !== pass2.value) { mark(pass2); return showError(signupForm, "err_pass_match"); }
     }
     if (!MOBILE_RE.test(normalizeMobile(phone.value))) { mark(phone); return showError(signupForm, "err_mobile"); }
@@ -231,11 +232,12 @@
         await Auth.register(payload);
         // الخطوة 3: التفضيلات
         sessionStorage.setItem("aqarak_flash", t("account_created"));
-        location.href = `preferences.html?welcome=1&next=${encodeURIComponent(next)}`;
+        location.href = `preferences?welcome=1&next=${encodeURIComponent(next)}`;
       } catch (err) {
         if (err.message === "err_admin_code") { setStep(1); mark($("suAdminCode")); }
         showError(signupForm, err.message);
-        if (err.message === "err_exists") mark(email);
+        if (["err_exists", "err_email", "err_email_disposable", "err_email_domain"].includes(err.message)) mark(email);
+        if (/^err_pass_/.test(err.message)) mark(pass);
       }
     });
   });
@@ -276,7 +278,8 @@
     const code = $("fpCode");
     const pass = $("fpPass");
     if (!/^\d{6}$/.test(code.value.trim())) { mark(code); return showError(forgotForm, "err_code"); }
-    if (pass.value.length < 6) { mark(pass); return showError(forgotForm, "err_pass_len"); }
+    const passErr = passwordProblem(pass.value);
+    if (passErr) { mark(pass); return showError(forgotForm, passErr); }
     await busy(forgotForm, async () => {
       try {
         await Auth.reset(resetEmail, code.value.trim(), pass.value);

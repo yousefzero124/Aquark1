@@ -21,6 +21,8 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { getStore, databaseUrl, DATA_DIR } = require("./store");
+const security = require("./security");
+const { clientIp } = security;
 
 const IS_VERCEL = !!process.env.VERCEL;
 const ROLES = ["buyer", "investor", "broker", "admin"];
@@ -53,9 +55,20 @@ function sessionSecret() {
   }
   return localSecret;
 }
-// كود الأدمن: على Vercel من ADMIN_CODE، وعلى جهازك 2005 لو مش متحدد
-function adminCode() {
-  return String(process.env.ADMIN_CODE || (IS_VERCEL ? "" : "2005")).trim();
+// الطلب جاي من الجهاز نفسه فعلاً؟ (مش من "Share Online" أو أي بروكسي) — المميزات التجريبية بتشتغل هنا بس
+function isLocalRequest(req) {
+  if (IS_VERCEL || process.env.AQARAK_PUBLIC === "1") return false;
+  const h = req.headers || {};
+  if (h["x-forwarded-for"] || h["x-forwarded-host"] || h["cf-connecting-ip"] || h["x-real-ip"] || h["forwarded"]) return false;
+  const ip = String((req.socket && req.socket.remoteAddress) || "");
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+}
+// كود الأدمن: على Vercel من ADMIN_CODE (لازم 12 حرف على الأقل عشان ميتخمّنش)، وعلى جهازك 2005 لو مش متحدد
+const ADMIN_CODE_MIN = 12;
+function adminCode(req) {
+  const env = String(process.env.ADMIN_CODE || "").trim();
+  if (env) return IS_VERCEL && env.length < ADMIN_CODE_MIN ? "" : env;
+  return req && isLocalRequest(req) ? "2005" : "";
 }
 
 /* ---------- كلمات المرور (scrypt) ---------- */
@@ -141,18 +154,28 @@ async function requireUser(req, store) {
   return user;
 }
 
-/* ---------- حماية من التخمين (محاولات كتير ورا بعض) ---------- */
+/* ---------- حماية من التخمين والسبام (محاولات كتير ورا بعض) ----------
+   العدّاد محفوظ في قاعدة البيانات، فبيشتغل حتى لو Vercel شغّل كذا نسخة من السيرفر.
+   وفيه نسخة في الذاكرة كمان عشان نرفض بسرعة من غير ما نسأل قاعدة البيانات. */
 const attempts = new Map();
-function clientIp(req) {
-  return String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || (req.socket && req.socket.remoteAddress) || "?";
-}
-function limit(key, max, windowMs) {
+async function limit(key, max, windowMs) {
   const now = Date.now();
   const rec = attempts.get(key);
-  if (!rec || rec.reset < now) { attempts.set(key, { n: 1, reset: now + windowMs }); return; }
-  rec.n += 1;
-  if (rec.n > max) fail(429, "err_too_many");
+  if (rec && rec.reset > now && rec.n >= max) fail(429, "err_too_many"); // معروف إنه زاد — من غير قاعدة بيانات
+  let n;
+  try {
+    n = await (await getStore()).hit(key, windowMs);
+  } catch (e) {
+    // قاعدة البيانات مش متاحة → نكمّل بالعدّاد اللي في الذاكرة
+    n = rec && rec.reset > now ? rec.n + 1 : 1;
+  }
+  attempts.set(key, { n, reset: rec && rec.reset > now ? rec.reset : now + windowMs });
   if (attempts.size > 5000) for (const [k, v] of attempts) if (v.reset < now) attempts.delete(k);
+  if (n > max) fail(429, "err_too_many");
+}
+async function clearLimit(key) {
+  attempts.delete(key);
+  try { await (await getStore()).clearHits(key); } catch (e) { /* مش مشكلة */ }
 }
 
 /* ---------- شكل المستخدم اللي بيرجع للموقع (من غير الباسورد) ---------- */
@@ -180,9 +203,10 @@ const str = (v, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : 
 const normEmail = (v) => str(v, 254).toLowerCase();
 const normMobile = (v) => String(v || "").replace(/[\s-]/g, "");
 
+// 8 حروف على الأقل، فيها حرف ورقم، ومش من الباسوردات المشهورة (server/security.js)
 function checkPassword(p) {
-  if (typeof p !== "string" || p.length < 6) fail(400, "err_pass_len");
-  if (p.length > 200) fail(400, "err_pass_len");
+  const problem = security.passwordProblem(p);
+  if (problem) fail(400, problem);
 }
 // البيانات الشخصية — partial=true في التعديل (الحقل اللي مش مبعوت مش بيتغيّر)
 function cleanProfile(body, partial) {
@@ -219,11 +243,27 @@ function cleanProfile(body, partial) {
   }
   return out;
 }
+// التفضيلات: بنحتفظ بالحقول المعروفة بس وبالشكل الصح (أي حاجة تانية بتتشال)
+const PREF_TYPES = ["apartment", "villa", "duplex", "chalet", "office", "land"];
+const PREF_CITIES = ["east", "arab", "manakh", "zohour", "dawahy", "south", "west", "portfouad"];
 function cleanPrefs(prefs) {
   if (prefs === null) return null;
   if (typeof prefs !== "object" || Array.isArray(prefs)) fail(400, "err_generic");
-  if (JSON.stringify(prefs).length > 4000) fail(400, "err_generic");
-  return prefs;
+  const list = (v, allowed) => (Array.isArray(v) ? [...new Set(v.filter((x) => allowed.includes(x)))] : []);
+  const num = (v, max) => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 && n <= max ? Math.round(n) : null;
+  };
+  return {
+    purpose: ["buy", "rent", "both"].includes(prefs.purpose) ? prefs.purpose : "both",
+    types: list(prefs.types, PREF_TYPES),
+    cities: list(prefs.cities, PREF_CITIES),
+    budgetMin: num(prefs.budgetMin, 1e10),
+    budgetMax: num(prefs.budgetMax, 1e10),
+    beds: num(prefs.beds, 20),
+    updatedAt: new Date().toISOString(),
+  };
 }
 // الصورة الشخصية: لينك https (زي صورة Google) أو صورة صغيرة متصغّرة من الموقع (data:image)
 function cleanPicture(v) {
@@ -291,12 +331,12 @@ async function sendResetEmail(email, code) {
 const routes = {
   /* ----- تسجيل ----- */
   async "POST /api/auth/register"({ req, res, body, store }) {
-    limit(`reg:${clientIp(req)}`, 20, 60 * 60 * 1000);
+    await limit(`reg:${clientIp(req)}`, 20, 60 * 60 * 1000);
     const role = body.role;
     if (!ROLES.includes(role)) fail(400, "err_role");
     if (role === "admin") {
-      limit(`admin:${clientIp(req)}`, 10, 60 * 60 * 1000);
-      const expected = adminCode();
+      await limit(`admin:${clientIp(req)}`, 10, 60 * 60 * 1000);
+      const expected = adminCode(req);
       if (!expected || !codesMatch(str(body.adminCode, 50), expected)) fail(403, "err_admin_code");
     }
 
@@ -310,6 +350,9 @@ const routes = {
       email = normEmail(body.email);
       if (!EMAIL_RE.test(email)) fail(400, "err_email");
       checkPassword(body.password);
+      // إيميل مؤقت أو دومين مش موجود → مرفوض
+      const problem = await security.emailProblem(email);
+      if (problem) fail(400, problem);
       passHash = await hashPassword(body.password);
     }
     const profile = cleanProfile(body, false);
@@ -335,14 +378,14 @@ const routes = {
   async "POST /api/auth/login"({ req, res, body, store }) {
     const email = normEmail(body.email);
     const password = typeof body.password === "string" ? body.password : "";
-    limit(`login:${clientIp(req)}`, 30, 15 * 60 * 1000);
-    limit(`login:${email}`, 10, 15 * 60 * 1000);
+    await limit(`login:${clientIp(req)}`, 30, 15 * 60 * 1000);
+    await limit(`login:${email}`, 10, 15 * 60 * 1000);
     if (!EMAIL_RE.test(email) || !password) fail(400, "err_login");
     const user = await store.getUserByEmail(email);
     if (!user) { await burnTime(password); fail(401, "err_login"); }
     if (!user.pass_hash) fail(400, "err_google_only");
     if (!(await verifyPassword(password, user.pass_hash))) fail(401, "err_login");
-    attempts.delete(`login:${email}`);
+    await clearLimit(`login:${email}`);
     setSession(req, res, user);
     return { user: publicUser(user) };
   },
@@ -362,11 +405,11 @@ const routes = {
   async "POST /api/auth/forgot"({ req, body, store }) {
     const email = normEmail(body.email);
     if (!EMAIL_RE.test(email)) fail(400, "err_email");
-    limit(`forgot:${clientIp(req)}`, 10, 60 * 60 * 1000);
-    limit(`forgot:${email}`, 3, 15 * 60 * 1000);
+    await limit(`forgot:${clientIp(req)}`, 10, 60 * 60 * 1000);
+    await limit(`forgot:${email}`, 3, 15 * 60 * 1000);
     const emailReady = !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
     // على جهازك من غير إيميل: الكود بيظهر على الشاشة (للتجربة بس)
-    const demo = !IS_VERCEL && !emailReady;
+    const demo = !emailReady && isLocalRequest(req);
     if (!emailReady && !demo) fail(503, "err_reset_unavailable");
 
     const user = await store.getUserByEmail(email);
@@ -384,7 +427,8 @@ const routes = {
   async "POST /api/auth/reset"({ req, body, store }) {
     const email = normEmail(body.email);
     const code = str(body.code, 10);
-    limit(`reset:${clientIp(req)}`, 20, 60 * 60 * 1000);
+    await limit(`reset:${clientIp(req)}`, 20, 60 * 60 * 1000);
+    await limit(`reset-mail:${email}`, 8, 60 * 60 * 1000); // تخمين الكود: 8 محاولات في الساعة بس لكل إيميل (من أي جهاز)
     const r = await store.getReset(email);
     if (!r || new Date(r.expires_at).getTime() < Date.now() || r.attempts >= 5) {
       if (r) await store.deleteReset(email);
@@ -405,7 +449,7 @@ const routes = {
 
   /* ----- Google ----- */
   async "POST /api/auth/google"({ req, res, body, store }) {
-    limit(`google:${clientIp(req)}`, 30, 15 * 60 * 1000);
+    await limit(`google:${clientIp(req)}`, 30, 15 * 60 * 1000);
     const g = await verifyGoogle(body.credential);
     let user = (await store.getUserByGoogleSub(g.sub)) || (await store.getUserByEmail(g.email));
     if (!user) {
@@ -413,7 +457,12 @@ const routes = {
       return { needsSignup: true, profile: { email: g.email, name: g.name, given_name: g.given_name, picture: g.picture } };
     }
     const patch = {};
-    if (!user.google_sub) patch.google_sub = g.sub;
+    if (!user.google_sub) {
+      patch.google_sub = g.sub;
+      // أول ربط بـ Google لحساب اتعمل بباسورد: الباسورد القديم بيتشال وكل جلساته بتقفل
+      // (عشان لو حد عمل حساب بإيميلك قبلك، ميفضلش معاه دخول بعد ما تربطه انت بـ Google)
+      if (user.pass_hash) patch.pass_hash = null;
+    }
     if (!user.picture && g.picture) patch.picture = cleanPicture(g.picture);
     if (Object.keys(patch).length) user = await store.updateUser(user.id, patch);
     setSession(req, res, user);
@@ -439,7 +488,7 @@ const routes = {
 
   async "POST /api/me/password"({ req, res, body, store }) {
     const user = await requireUser(req, store);
-    limit(`pw:${user.id}`, 10, 15 * 60 * 1000);
+    await limit(`pw:${user.id}`, 10, 15 * 60 * 1000);
     if (user.pass_hash && !(await verifyPassword(String(body.current || ""), user.pass_hash))) fail(400, "err_current_password");
     checkPassword(body.password);
     const updated = await store.updateUser(user.id, { pass_hash: await hashPassword(body.password) });
@@ -552,7 +601,7 @@ async function health(res) {
   send(res, 200, {
     database,
     sessionSecret: IS_VERCEL ? (secret.length >= 32 ? "ok" : secret ? "too_short" : "missing") : "ok (local)",
-    adminCode: adminCode() ? "ok" : "missing",
+    adminCode: process.env.ADMIN_CODE ? (adminCode() ? "ok" : `too_short (min ${ADMIN_CODE_MIN})`) : (IS_VERCEL ? "missing" : "ok (local 2005)"),
     resetEmail: process.env.RESEND_API_KEY && process.env.EMAIL_FROM ? "ok" : "off",
     videoUpload: { blob: "ok", local: "ok (local)", off: "off (needs Vercel Blob)" }[require("./video").mode()],
     google: process.env.GOOGLE_CLIENT_ID ? "ok" : "off",
@@ -563,16 +612,20 @@ async function handleApi(req, res, pathname) {
   try {
     const method = req.method || "GET";
     if (method === "GET" && pathname.replace(/\/+$/, "") === "/api/health") return await health(res);
+    // طلبات كتير جداً من نفس الجهاز (سبام / flood)
+    if (!security.floodCheck(clientIp(req))) fail(429, "err_too_many");
     const found = match(method, pathname);
     if (!found) fail(404, "err_not_found");
+    // أي طلب بيغيّر حاجة لازم يكون جاي من الموقع نفسه
+    if (method !== "GET" && method !== "HEAD" && (!security.sameOrigin(req) || req.headers["sec-fetch-site"] === "cross-site")) fail(403, "err_forbidden");
     let body = {};
     const rawUpload = method === "POST" && pathname.replace(/\/+$/, "") === "/api/uploads/video"; // ملف فيديو مش JSON
     if (rawUpload) {
       if (!/^video\//i.test(String(req.headers["content-type"] || ""))) fail(415, "err_video_type");
     } else if (method !== "GET" && method !== "HEAD") {
       // بس JSON — ده كمان بيمنع أي موقع تاني إنه يبعت طلبات باسم المستخدم (CSRF)
-      const type = String(req.headers["content-type"] || "");
-      if (!type.includes("application/json")) fail(415, "err_generic");
+      const type = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+      if (type !== "application/json") fail(415, "err_generic");
       body = await readBody(req);
       if (!body || typeof body !== "object" || Array.isArray(body)) fail(400, "err_generic");
     }

@@ -13,7 +13,7 @@
         <span class="ico">${ICONS.lock}</span>
         <h2>${esc(t("gate_login_title"))}</h2>
         <p>${esc(t("settings_login"))}</p>
-        <div class="actions"><a class="btn btn-primary" href="auth.html?next=settings.html#login">${esc(t("login"))}</a></div>
+        <div class="actions"><a class="btn btn-primary" href="auth?next=settings#login">${esc(t("login"))}</a></div>
       </div>`;
     return;
   }
@@ -182,7 +182,8 @@
     const n1 = $("sNew");
     const n2 = $("sNew2");
     if (hasPassword && !cur.value) { mark(cur); return showError(secForm, "err_current_password"); }
-    if (n1.value.length < 6) { mark(n1); return showError(secForm, "err_pass_len"); }
+    const passErr = passwordProblem(n1.value);
+    if (passErr) { mark(n1); return showError(secForm, passErr); }
     if (n1.value !== n2.value) { mark(n2); return showError(secForm, "err_pass_match"); }
     try {
       user = await Auth.changePassword(hasPassword ? cur.value : "", n1.value);
@@ -200,7 +201,7 @@
      ======================================================= */
   $("switchAccount").addEventListener("click", async () => {
     await Auth.logout();
-    location.href = "auth.html#login";
+    location.href = "auth#login";
   });
   $("deleteAccount").addEventListener("click", async () => {
     if (!confirm(t("confirm_delete_account"))) return;
@@ -210,6 +211,6 @@
       return toast(t(err.message));
     }
     sessionStorage.setItem("aqarak_flash", t("account_deleted"));
-    location.href = "index.html";
+    location.href = "/";
   });
 })();

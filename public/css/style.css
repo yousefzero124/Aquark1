@@ -3092,7 +3092,7 @@ td.is-winner { background: rgba(245, 197, 24, .05); }
 }
 
 /* =========================================================
-   حاسبة الاستثمار (invest.html) — للمستثمر بس
+   حاسبة الاستثمار (invest) — للمستثمر بس
    ========================================================= */
 .dash-tabs { margin-top: 20px; }
 .dash-tabs button { display: inline-flex; align-items: center; gap: 6px; }

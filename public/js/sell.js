@@ -1,14 +1,14 @@
 /* =========================================================
    صفحة "اعرض عقارك" — للبروكر والمستثمر والأدمن
    - إعلان جديد: صور + صورة 360° + فيديو (اختياريين)
-   - تعديل إعلان: sell.html?edit=<id> (لصاحب الإعلان أو الأدمن)
+   - تعديل إعلان: sell?edit=<id> (لصاحب الإعلان أو الأدمن)
    ========================================================= */
 (function () {
   const user = Auth.current();
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(location.search);
   const editId = params.get("edit");
-  const back = safeNext(params.get("next") || (user && user.role === "admin" ? "admin.html#listings" : "dashboard.html#listings"));
+  const back = safeNext(params.get("next") || (user && user.role === "admin" ? "admin#listings" : "dashboard#listings"));
 
   /* --- Gate: بروكر أو مستثمر أو أدمن --- */
   if (!user || !canPost(user)) {
@@ -20,8 +20,8 @@
            <h2>${esc(t("gate_login_title"))}</h2>
            <p>${esc(t("gate_login_text"))}</p>
            <div class="actions">
-             <a class="btn btn-primary" href="auth.html?next=sell.html&role=broker#signup">${esc(t("signup"))}</a>
-             <a class="btn btn-outline" href="auth.html?next=sell.html#login">${esc(t("login"))}</a>
+             <a class="btn btn-primary" href="auth?next=sell&role=broker#signup">${esc(t("signup"))}</a>
+             <a class="btn btn-outline" href="auth?next=sell#login">${esc(t("login"))}</a>
            </div>
          </div>`
       : `<div class="gate">
@@ -29,8 +29,8 @@
            <h2>${esc(t("gate_role_title"))}</h2>
            <p>${esc(t("gate_role_text", { role: roleName(user.role) }))}</p>
            <div class="actions">
-             <a class="btn btn-primary" href="settings.html#profile">${esc(t("nav_settings"))}</a>
-             <a class="btn btn-outline" href="properties.html?mode=buy">${esc(t("browse_props"))}</a>
+             <a class="btn btn-primary" href="settings#profile">${esc(t("nav_settings"))}</a>
+             <a class="btn btn-outline" href="properties?mode=buy">${esc(t("browse_props"))}</a>
            </div>
          </div>`;
     return;
@@ -375,7 +375,7 @@
   const mineCard = $("mine");
   if (user.role === "admin") {
     mineCard.innerHTML = `<h3>${esc(t("manage_listings"))}</h3>
-      <a class="btn btn-outline btn-block" href="admin.html#listings">${ICONS.list}<span>${esc(t("manage_listings"))}</span></a>`;
+      <a class="btn btn-outline btn-block" href="admin#listings">${ICONS.list}<span>${esc(t("manage_listings"))}</span></a>`;
   }
   function renderMine() {
     if (user.role === "admin") return;
@@ -391,7 +391,7 @@
               <small>${esc(t(l.purpose === "rent" ? "for_rent" : "for_sale"))} · ${esc(fmtPrice(l.price))}${l.pano ? " · 360°" : ""}${Moderation.isHidden(l.id) ? ` · <span style="color:var(--danger)">${esc(t("st_hidden"))}</span>` : ""}</small>
             </div>
             <div class="mi-actions">
-              <a class="btn btn-outline btn-sm" href="sell.html?edit=${encodeURIComponent(l.id)}&next=sell.html%23mine" title="${esc(t("edit_listing"))}">${ICONS.edit}</a>
+              <a class="btn btn-outline btn-sm" href="sell?edit=${encodeURIComponent(l.id)}&next=sell%23mine" title="${esc(t("edit_listing"))}">${ICONS.edit}</a>
               <button type="button" class="btn btn-danger btn-sm" data-delete="${esc(l.id)}" title="${esc(t("delete"))}">${ICONS.trash}</button>
             </div>
           </div>`).join("")
