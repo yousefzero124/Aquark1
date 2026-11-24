@@ -28,11 +28,19 @@
       </div>
       <div class="btn-row" id="dashActions"></div>
     </div>
+    <!-- تابات للمستثمر بس: عقاراتي / حاسبة الاستثمار -->
+    <div class="container">
+      <div class="seg hidden dash-tabs" id="dashTabs">
+        <button type="button" data-tab="listings" data-i18n="my_listings"></button>
+        <button type="button" data-tab="calc" data-i18n="page_invest"></button>
+      </div>
+    </div>
   </section>
 
   <main class="container dash-page">
     <div class="kpis" id="dashKpis"></div>
     <div id="dashBody"></div>
+    <div id="dashCalc" class="hidden"></div>
   </main>
 
   <div id="site-footer"></div>
@@ -42,6 +50,7 @@
   <script src="js/data.js"></script>
   <script src="js/main.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/invest.js"></script>
   <script src="js/dashboard.js"></script>
 </body>
 </html>

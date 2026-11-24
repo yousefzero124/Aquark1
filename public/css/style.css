@@ -3094,7 +3094,8 @@ td.is-winner { background: rgba(245, 197, 24, .05); }
 /* =========================================================
    حاسبة الاستثمار (invest.html) — للمستثمر بس
    ========================================================= */
-.inv-page { padding-top: 28px; padding-bottom: 60px; }
+.dash-tabs { margin-top: 20px; }
+.dash-tabs button { display: inline-flex; align-items: center; gap: 6px; }
 .inv-layout { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px; align-items: start; }
 .inv-form { min-width: 0; }
 .inv-form .form-group { margin-bottom: 14px; min-width: 0; }

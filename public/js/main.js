@@ -949,9 +949,7 @@ function renderHeader() {
             <span class="role-chip">${esc(roleName(user.role))}</span>
           </div>
           ${isAdmin ? `<a href="admin.html">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>` : ""}
-          ${hasMine ? `<a href="dashboard.html">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>` : ""}
-          ${canInvest(user) ? `<a href="invest.html">${ICONS.calc}<span>${esc(t("page_invest"))}</span></a>` : ""}
-          <a href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>
+          ${hasMine ? `<a href="dashboard.html">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>` : ""}          <a href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>
           <a href="properties.html?favs=1">${ICONS.heart}<span>${esc(t("my_favs"))}</span></a>
           <a href="settings.html#prefs">${ICONS.sliders}<span>${esc(t("tab_prefs"))}</span></a>
           <a href="settings.html#profile">${ICONS.gear}<span>${esc(t("nav_settings"))}</span></a>
@@ -1157,7 +1155,7 @@ function openDetails(id) {
         </div>
         <div class="inv-box-foot">
           <small>${esc(t("inv_rent_est", { v: fmtPrice(q.rent) }))} · ${esc(t(`inv_src_${q.rentSource}`))}<br>${esc(t("inv_assume", { y: q.years, g: Invest.DEFAULTS.growthPct }))}</small>
-          <a class="btn btn-outline btn-sm" href="invest.html?id=${encodeURIComponent(l.id)}">${ICONS.calc}<span>${esc(t("inv_open"))}</span></a>
+          ${l.ownerId === user.id ? `<a class="btn btn-outline btn-sm" href="dashboard.html#calc=${encodeURIComponent(l.id)}">${ICONS.calc}<span>${esc(t("inv_open"))}</span></a>` : ""}
         </div>
       </div>`;
   }

@@ -223,7 +223,7 @@
             <tbody>${body}</tbody>
           </table>
         </div>
-        <p class="hint cmp-note">${esc(t("compare_note"))}${investor && purpose === "sale" ? ` ${esc(t("cmp_note_invest", { y: Invest.DEFAULTS.years }))} <a href="invest.html">${esc(t("inv_open"))}</a>` : ""}${hasPrefs(me) ? "" : ` <a href="preferences.html">${esc(t("compare_prefs_tip"))}</a>`}</p>
+        <p class="hint cmp-note">${esc(t("compare_note"))}${investor && purpose === "sale" ? ` ${esc(t("cmp_note_invest", { y: Invest.DEFAULTS.years }))}` : ""}${hasPrefs(me) ? "" : ` <a href="preferences.html">${esc(t("compare_prefs_tip"))}</a>`}</p>
       </section>`;
   }
 
