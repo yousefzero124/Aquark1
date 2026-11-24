@@ -27,6 +27,7 @@ const TABLES = {
       city: "TEXT NOT NULL", title: "TEXT NOT NULL", address: "TEXT", price: "BIGINT NOT NULL", size: "INT NOT NULL",
       beds: "INT", baths: "INT", description: "TEXT", phone: "TEXT", lat: "DOUBLE PRECISION", lng: "DOUBLE PRECISION",
       images: "INT", has_pano: "BOOLEAN", media_v: "TEXT", created_at: "TIMESTAMPTZ", updated_at: "TIMESTAMPTZ",
+      video_url: "TEXT", // فيديو: لينك Vercel Blob أو /api/video/... (على الجهاز) أو youtube:<id>
     },
   },
   // الصور نفسها (base64) — بتتعرض من /api/media/:id/:slot
@@ -220,9 +221,11 @@ function fileStore() {
    q(text, params) → مصفوفة صفوف
    ========================================================= */
 async function buildPg(q) {
-  // الجداول بتتعمل لوحدها أول مرة (سؤال واحد بس لو كانت موجودة)
-  const probe = await q("SELECT to_regclass('public.saved_searches') AS t");
-  if (!probe[0] || !probe[0].t) {
+  // الجداول بتتعمل لوحدها، والأعمدة الجديدة بتتضاف لوحدها (سؤال واحد بس لو كله موجود)
+  const existing = await q("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema()");
+  const have = {};
+  existing.forEach((r) => { (have[r.table_name] = have[r.table_name] || new Set()).add(r.column_name); });
+  if (!have.users || !have.password_resets) {
     await q(`CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -247,10 +250,17 @@ async function buildPg(q) {
       expires_at TIMESTAMPTZ NOT NULL,
       attempts INT NOT NULL DEFAULT 0
     )`);
-    for (const [table, s] of Object.entries(TABLES)) {
+  }
+  for (const [table, s] of Object.entries(TABLES)) {
+    if (!have[table]) {
       const cols = Object.entries(s.cols).map(([k, type]) => `${k} ${type}`).join(", ");
       await q(`CREATE TABLE IF NOT EXISTS ${table} (${cols}, PRIMARY KEY (${s.pk.join(", ")}))`);
       for (const col of s.index || []) await q(`CREATE INDEX IF NOT EXISTS ${table}_${col}_idx ON ${table} (${col})`);
+      continue;
+    }
+    // عمود جديد اتضاف في الكود بعد ما الجدول اتعمل
+    for (const [col, type] of Object.entries(s.cols)) {
+      if (!have[table].has(col)) await q(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${col} ${type.replace(/\s+NOT NULL/i, "")}`);
     }
   }
 

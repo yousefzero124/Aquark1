@@ -20,8 +20,8 @@
 
   <section class="page-head">
     <div class="container">
-      <h1 data-i18n="sell_title"></h1>
-      <p data-i18n="sell_sub"></p>
+      <h1 id="sellTitle" data-i18n="sell_title"></h1>
+      <p id="sellSub" data-i18n="sell_sub"></p>
     </div>
   </section>
 
@@ -133,7 +133,35 @@
         </div>
       </div>
 
+      <!-- فيديو (اختياري): رفع ملف أو لينك يوتيوب -->
+      <div class="card">
+        <h3><span id="videoIco"></span> <span data-i18n="l_video"></span> <small class="optional" data-i18n="optional"></small></h3>
+        <p class="hint" style="margin:-8px 0 12px" data-i18n="video_hint"></p>
+        <div id="videoPick">
+          <label class="dropzone" id="videoZone" for="sVideo">
+            <span id="videoZoneIco"></span>
+            <span data-i18n="video_upload"></span>
+            <small data-i18n="video_upload_limit"></small>
+          </label>
+          <input id="sVideo" type="file" accept="video/mp4,video/webm,video/quicktime" hidden>
+          <p class="hint hidden" id="videoOff" data-i18n="video_off_note"></p>
+          <div class="video-progress hidden" id="videoProgress"><span id="videoBar"></span><small id="videoPct"></small></div>
+          <div class="yt-row">
+            <span class="yt-or" data-i18n="video_or_youtube"></span>
+            <div class="yt-input">
+              <input class="input" id="sYoutube" type="url" dir="ltr" placeholder="https://youtube.com/watch?v=…">
+              <button type="button" class="btn btn-outline" id="ytAdd" data-i18n="video_yt_add"></button>
+            </div>
+          </div>
+        </div>
+        <div class="video-picked hidden" id="videoPicked">
+          <div class="video-preview" id="videoPreview"></div>
+          <button type="button" class="btn btn-danger btn-sm" id="videoRemove"></button>
+        </div>
+      </div>
+
       <button class="btn btn-primary btn-lg btn-block" type="submit" style="margin-top:20px" id="submitBtn" data-i18n="submit_listing"></button>
+      <a class="btn btn-ghost btn-block hidden" id="cancelEdit" style="margin-top:10px" data-i18n="cancel"></a>
     </form>
 
     <aside>

@@ -66,6 +66,8 @@ const ICONS = {
   message: LI("message-circle"),
   send: LI("send-horizontal"),
   pano: LI("rotate-3d"),
+  video: LI("clapperboard"),
+  play: LI("play"),
   bellPlus: LI("bell-plus"),
   history: LI("chart-line"),
   back: LI("arrow-right"),
@@ -284,6 +286,13 @@ function matchScore(l, prefs) {
   return max ? score / max : 0;
 }
 function hasPrefs(user) { return !!(user && user.prefs); }
+// اللي يقدروا ينشروا إعلانات: البروكر والمستثمر والأدمن
+const POSTER_ROLES = ["broker", "investor", "admin"];
+function canPost(user) { return !!(user && POSTER_ROLES.includes(user.role)); }
+// صاحب الإعلان أو الأدمن يقدر يعدّله (الإعلانات الحقيقية بس)
+function canEditListing(l, user = Auth.current()) {
+  return !!(user && l && !Listings.isSeed(l.id) && (l.ownerId === user.id || user.role === "admin"));
+}
 
 /* =========================================================
    الإعلانات والمفضلة والإشعارات — محفوظة على السيرفر
@@ -345,6 +354,13 @@ const Listings = {
     this.server = [listing, ...this.server];
     this._store();
     Notifs.sync();
+    return listing;
+  },
+  // تعديل الإعلان كله (بيانات + صور + 360 + فيديو)
+  async update(id, payload) {
+    const { listing } = await Api.call("PUT", `/api/listings/${encodeURIComponent(id)}`, payload);
+    this.server = this.server.map((l) => (l.id === id ? listing : l));
+    this._store();
     return listing;
   },
   async setPrice(id, price) {
@@ -709,7 +725,8 @@ function renderHeader() {
     const avatar = user.picture
       ? `<span class="avatar"><img src="${esc(user.picture)}" alt="" referrerpolicy="no-referrer"></span>`
       : `<span class="avatar">${initial}</span>`;
-    const canSell = user.role === "broker" || user.role === "admin";
+    const isAdmin = user.role === "admin";
+    const hasMine = canPost(user) && !isAdmin; // "عقاراتي" للبروكر والمستثمر بس
     const favN = favCount();
     const unread = Notifs.unread();
     const chatsN = Notifs.chatsUnread();
@@ -742,8 +759,11 @@ function renderHeader() {
             <small>${esc(user.email)}</small><br>
             <span class="role-chip">${esc(roleName(user.role))}</span>
           </div>
-          ${user.role === "admin" ? `<a href="admin.html">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>` : ""}
-          ${canSell ? `<a href="sell.html#mine">${ICONS.list}<span>${esc(t("my_listings"))}</span></a>` : ""}
+          ${isAdmin
+            ? `<a href="admin.html">${ICONS.chart}<span>${esc(t("nav_admin"))}</span></a>
+               <a href="admin.html#listings">${ICONS.list}<span>${esc(t("manage_listings"))}</span></a>`
+            : `<a href="dashboard.html">${ICONS.chart}<span>${esc(t("nav_dashboard"))}</span></a>`}
+          ${hasMine ? `<a href="dashboard.html#listings">${ICONS.building}<span>${esc(t("my_listings"))}</span></a>` : ""}
           <a href="messages.html">${ICONS.message}<span>${esc(t("messages"))}</span></a>
           <a href="properties.html?favs=1">${ICONS.heart}<span>${esc(t("my_favs"))}</span></a>
           <a href="settings.html#prefs">${ICONS.sliders}<span>${esc(t("tab_prefs"))}</span></a>
@@ -848,7 +868,10 @@ function propCard(l) {
         ${Moderation.isVerified(l) ? `<span class="verified-badge">${ICONS.verified}${esc(t("verified"))}</span>` : ""}
         <button class="fav-btn ${fav ? "on" : ""}" type="button" data-fav="${esc(l.id)}"
                 aria-label="${esc(t(fav ? "fav_remove" : "fav_add"))}">${ICONS.heart}</button>
-        ${l.pano ? `<span class="pano-chip" title="${esc(t("pano_has"))}">${ICONS.pano}<bdi dir="ltr">360°</bdi></span>` : ""}
+        ${l.pano || l.video ? `<span class="media-chips">
+          ${l.pano ? `<span class="pano-chip" title="${esc(t("pano_has"))}">${ICONS.pano}<bdi dir="ltr">360°</bdi></span>` : ""}
+          ${l.video ? `<span class="pano-chip" title="${esc(t("video_has"))}">${ICONS.video}</span>` : ""}
+        </span>` : ""}
         ${showYield ? `<span class="yield-chip">${esc(t("yield_chip", { v: l.yield }))}</span>` : ""}
         ${hasPrefs(user) && matchScore(l, user.prefs) >= 0.75 ? `<span class="match-chip">${ICONS.star}${esc(t("match_chip"))}</span>` : ""}
       </div>
@@ -920,8 +943,11 @@ function openDetails(id) {
   const isInvestor = user && (user.role === "investor" || user.role === "admin");
   const coords = listingCoords(l);
 
-  const panoBtn = l.pano
-    ? `<button type="button" class="pano-btn" data-open-pano>${ICONS.pano}<span>${esc(t("pano_open"))}</span></button>` : "";
+  const panoBtn = l.pano || l.video
+    ? `<div class="media-btns">
+        ${l.video ? `<button type="button" class="pano-btn" data-open-video>${ICONS.play}<span>${esc(t("video_open"))}</span></button>` : ""}
+        ${l.pano ? `<button type="button" class="pano-btn" data-open-pano>${ICONS.pano}<span>${esc(t("pano_open"))}</span></button>` : ""}
+      </div>` : "";
   const gallery = images.length
     ? `<div class="gallery-main"><img id="galleryMain" src="${esc(images[0])}" alt="" onerror="imgFail(this)">${panoBtn}</div>
        ${images.length > 1 ? `<div class="gallery-thumbs">${images.map((src, i) =>
@@ -995,6 +1021,7 @@ function openDetails(id) {
           </div>` : ""}
         </div>
         <aside class="contact-card">
+          ${canEditListing(l, user) ? `<a class="btn btn-dark btn-block" href="sell.html?edit=${encodeURIComponent(l.id)}&next=${encodeURIComponent(location.pathname.split("/").pop() + location.search + location.hash)}">${ICONS.edit}${esc(t("edit_listing"))}</a>` : ""}
           ${contact}
           <button class="btn btn-ghost btn-block fav-text-btn ${fav ? "on" : ""}" type="button" data-fav-modal="${esc(l.id)}">
             ${ICONS.heart}
@@ -1020,6 +1047,8 @@ function openDetails(id) {
   });
   const panoOpen = el.querySelector("[data-open-pano]");
   if (panoOpen) panoOpen.addEventListener("click", () => openPano(l.pano, loc(l.title)));
+  const videoOpen = el.querySelector("[data-open-video]");
+  if (videoOpen) videoOpen.addEventListener("click", () => openVideo(l.video, loc(l.title)));
   const chatStart = el.querySelector("[data-start-chat]");
   if (chatStart) chatStart.addEventListener("click", async () => {
     chatStart.disabled = true;
@@ -1091,6 +1120,71 @@ async function openPano(src, title = "") {
     if (host) host.innerHTML = `<div class="map-loading">${esc(t("pano_error"))}</div>`;
     else close();
   }
+}
+
+/* ---------- فيديو العقار (ملف مرفوع أو يوتيوب) ---------- */
+function videoPlayerHTML(v) {
+  if (!v) return "";
+  if (v.type === "youtube") {
+    return `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.id)}?rel=0&autoplay=1" title="${esc(t("video_title"))}"
+      allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  }
+  return `<video src="${esc(v.url)}" controls autoplay playsinline preload="metadata"></video>`;
+}
+function openVideo(v, title = "") {
+  const { el } = openModal(`
+    <div class="pano-wrap">
+      <div class="pano-head">${ICONS.video}<strong>${esc(t("video_title"))}</strong>${title ? `<span>${esc(title)}</span>` : ""}</div>
+      <div class="video-view">${videoPlayerHTML(v)}</div>
+    </div>`, { size: "lg" });
+  el.classList.add("modal-pano");
+}
+// تحويل لينك يوتيوب لـ "youtube:<id>" (أو null لو مش لينك صحيح)
+function parseYouTube(url) {
+  const s = String(url || "").trim();
+  const m = s.match(/^(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? `youtube:${m[1]}` : null;
+}
+
+/* ---------- تعديل السعر (من عقاراتي / لوحتي) ----------
+   السعر الجديد بيتسجل في سجل السعر، ولو نزل اللي حافظين العقار بيجيلهم إشعار */
+function openPriceEditor(l) {
+  const { el, close } = openModal(`
+    <form class="modal-pad" novalidate>
+      <h2 style="margin:0 0 6px;font-size:22px">${ICONS.edit} ${esc(t("edit_price"))}</h2>
+      <p class="hint" style="margin:0 0 14px">${esc(loc(l.title))}</p>
+      <div class="form-group">
+        <label for="newPrice">${esc(t(l.purpose === "rent" ? "l_price_rent" : "l_price"))}</label>
+        <input class="input" id="newPrice" type="number" min="1" step="1000" dir="ltr" value="${esc(l.price)}">
+        <small class="hint">${esc(t("edit_price_hint"))}</small>
+      </div>
+      <div class="alert alert-error hidden" data-error></div>
+      <div class="btn-row" style="justify-content:flex-end">
+        <button type="button" class="btn btn-ghost" data-cancel>${esc(t("cancel"))}</button>
+        <button type="submit" class="btn btn-primary">${esc(t("save"))}</button>
+      </div>
+    </form>`, { size: "sm" });
+  const f = el.querySelector("form");
+  el.querySelector("[data-cancel]").addEventListener("click", close);
+  const input = el.querySelector("#newPrice");
+  input.select();
+  f.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const price = Number(input.value);
+    const box = f.querySelector("[data-error]");
+    if (!(price > 0)) { box.textContent = t("err_required"); box.classList.remove("hidden"); return; }
+    const btn = f.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      await Listings.setPrice(l.id, price);
+      close();
+      toast(t("price_updated"), "success");
+    } catch (err) {
+      btn.disabled = false;
+      box.textContent = t(err.message);
+      box.classList.remove("hidden");
+    }
+  });
 }
 
 /* ---------- سجل السعر (رسم بياني بسيط SVG) ---------- */

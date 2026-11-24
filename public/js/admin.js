@@ -274,6 +274,7 @@
         </div></td>
         <td><div class="row-actions">
           <button type="button" class="btn btn-outline btn-sm" data-prop-id="${esc(l.id)}">${esc(t("view"))}</button>
+          ${seed ? "" : `<a class="btn btn-outline btn-sm" href="sell.html?edit=${encodeURIComponent(l.id)}&next=admin.html%23listings">${ICONS.edit}<span>${esc(t("edit"))}</span></a>`}
           <button type="button" class="btn btn-outline btn-sm" data-verify="${esc(l.id)}">${esc(t(verified ? "unverify" : "verify"))}</button>
           <button type="button" class="btn btn-outline btn-sm" data-feature="${esc(l.id)}">${esc(t(featured ? "unfeature" : "feature"))}</button>
           <button type="button" class="btn btn-outline btn-sm" data-hide="${esc(l.id)}">${esc(t(hidden ? "show" : "hide"))}</button>

@@ -554,6 +554,7 @@ async function health(res) {
     sessionSecret: IS_VERCEL ? (secret.length >= 32 ? "ok" : secret ? "too_short" : "missing") : "ok (local)",
     adminCode: adminCode() ? "ok" : "missing",
     resetEmail: process.env.RESEND_API_KEY && process.env.EMAIL_FROM ? "ok" : "off",
+    videoUpload: { blob: "ok", local: "ok (local)", off: "off (youtube only)" }[require("./video").mode()],
     google: process.env.GOOGLE_CLIENT_ID ? "ok" : "off",
   });
 }
@@ -565,7 +566,10 @@ async function handleApi(req, res, pathname) {
     const found = match(method, pathname);
     if (!found) fail(404, "err_not_found");
     let body = {};
-    if (method !== "GET" && method !== "HEAD") {
+    const rawUpload = method === "POST" && pathname.replace(/\/+$/, "") === "/api/uploads/video"; // ملف فيديو مش JSON
+    if (rawUpload) {
+      if (!/^video\//i.test(String(req.headers["content-type"] || ""))) fail(415, "err_video_type");
+    } else if (method !== "GET" && method !== "HEAD") {
       // بس JSON — ده كمان بيمنع أي موقع تاني إنه يبعت طلبات باسم المستخدم (CSRF)
       const type = String(req.headers["content-type"] || "");
       if (!type.includes("application/json")) fail(415, "err_generic");
@@ -575,6 +579,7 @@ async function handleApi(req, res, pathname) {
     const store = await getStore();
     const query = new URL(req.url || "/", "http://localhost").searchParams;
     const out = await found.fn({ req, res, body, store, params: found.params, query });
+    if (out && out.handled) return; // الـ route رد بنفسه (زي الفيديو)
     // ملفات (صور الإعلانات)
     if (out && out.raw) {
       res.statusCode = 200;

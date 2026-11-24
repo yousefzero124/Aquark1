@@ -20,8 +20,16 @@
 //  POST   /api/searches                احفظ بحث (بيجيلك إشعار لما ينزل عقار مطابق)
 //  DELETE /api/searches/:id            امسح بحث محفوظ
 // =========================================================
+//  PUT    /api/listings/:id            (صاحب الإعلان/أدمن) تعديل الإعلان كله (بيانات + صور + 360 + فيديو)
+//  GET    /api/dashboard               أرقام لوحة المستخدم (مرات الحفظ والمحادثات لكل عقار من عقاراته)
+//  GET    /api/uploads/config          الفيديو متاح ازاي (Blob / على الجهاز / يوتيوب بس)
+//  POST   /api/uploads/blob            تصريح رفع فيديو لـ Vercel Blob
+//  POST   /api/uploads/video           رفع فيديو (على الجهاز بس)
+//  GET    /api/video/:file             عرض فيديو (على الجهاز بس)
 const crypto = require("crypto");
+const video = require("./video");
 
+const POSTER_ROLES = ["broker", "investor", "admin"]; // اللي يقدروا ينشروا إعلانات
 const TYPES = ["apartment", "villa", "duplex", "chalet", "office", "land"];
 const CITIES = ["east", "arab", "manakh", "zohour", "dawahy", "south", "west", "portfouad"];
 const SEED_RE = /^[sg]\d{1,4}$/; // العقارات التجريبية (موجودة في كود الموقع مش في قاعدة البيانات)
@@ -93,6 +101,7 @@ module.exports = function features(h) {
       priceHistory: history.map((x) => ({ price: x.price, at: x.created_at })),
     };
     if (l.has_pano) out.pano = `/api/media/${l.id}/pano?v=${v}`;
+    if (l.video_url) out.video = video.toPublic(l.video_url);
     if (l.lat != null && l.lng != null) { out.lat = l.lat; out.lng = l.lng; }
     return out;
   }
@@ -143,7 +152,28 @@ module.exports = function features(h) {
     if (l.owner_id !== me.id && me.role !== "admin") fail(403, "err_forbidden");
     return l;
   }
+  // سعر جديد → يتسجل في سجل السعر، ولو نزل اللي حافظينه في المفضلة بيجيلهم إشعار
+  async function changePrice(store, l, price) {
+    if (price === l.price) return;
+    const t = now();
+    await store.update("listings", { id: l.id }, { price, updated_at: t });
+    await store.insert("price_history", { id: newId("p"), listing_id: l.id, price, created_at: t });
+    if (price < l.price) {
+      const favs = await store.find("favorites", { listing_id: l.id });
+      for (const f of favs) {
+        if (f.user_id !== l.owner_id) await notify(store, f.user_id, "price_drop", { title: l.title, price, purpose: l.purpose, old: l.price }, l.id);
+      }
+    }
+  }
+  async function freshListing(store, id) {
+    const row = await store.get("listings", { id });
+    const hist = await store.find("price_history", { listing_id: id }, { order: "created_at ASC" });
+    return publicListing(row, hist);
+  }
+
   async function removeListing(store, id) {
+    const l = await store.get("listings", { id });
+    if (l && l.video_url) await video.remove(l.video_url);
     await Promise.all([
       store.remove("listings", { id }),
       store.remove("listing_media", { listing_id: id }),
@@ -237,16 +267,17 @@ module.exports = function features(h) {
 
     async "POST /api/listings"({ req, body, store }) {
       const me = await requireUser(req, store);
-      if (!["broker", "admin"].includes(me.role)) fail(403, "err_forbidden");
+      if (!POSTER_ROLES.includes(me.role)) fail(403, "err_forbidden");
       limit(`listing:${me.id}`, 30, 60 * 60 * 1000);
       const fields = cleanListing(body);
       const images = (Array.isArray(body.images) ? body.images : []).slice(0, MAX_IMAGES).map((x) => cleanImage(x, MAX_IMAGE_CHARS));
       const pano = body.pano ? cleanImage(body.pano, MAX_PANO_CHARS) : null;
+      const videoUrl = video.clean(body.video, fail);
       const id = newId("l");
       const t = now();
       const row = await store.insert("listings", {
         id, owner_id: me.id, owner_name: me.name, ...fields,
-        images: images.length, has_pano: !!pano, media_v: Date.now().toString(36),
+        images: images.length, has_pano: !!pano, media_v: Date.now().toString(36), video_url: videoUrl,
         created_at: t, updated_at: t,
       });
       for (let i = 0; i < images.length; i++) await store.insert("listing_media", { listing_id: id, slot: String(i), ...images[i] });
@@ -257,26 +288,54 @@ module.exports = function features(h) {
       return { status: 201, data: { listing: publicListing(row, [hrow]) } };
     },
 
+    // تعديل السعر بس (من "عقاراتي")
     async "PATCH /api/listings/:id"({ req, body, store, params }) {
       const me = await requireUser(req, store);
       const l = await ownListing(store, me, params.id);
       if (!("price" in body)) fail(400, "err_generic");
-      const price = int(body.price, 1, 1e10, "err_required");
-      if (price !== l.price) {
-        const t = now();
-        await store.update("listings", { id: l.id }, { price, updated_at: t });
-        await store.insert("price_history", { id: newId("p"), listing_id: l.id, price, created_at: t });
-        // اللي حافظين العقار في المفضلة يعرفوا إن السعر نزل
-        if (price < l.price) {
-          const favs = await store.find("favorites", { listing_id: l.id });
-          for (const f of favs) {
-            if (f.user_id !== l.owner_id) await notify(store, f.user_id, "price_drop", { title: l.title, price, purpose: l.purpose, old: l.price }, l.id);
-          }
+      await changePrice(store, l, int(body.price, 1, 1e10, "err_required"));
+      return { listing: await freshListing(store, l.id) };
+    },
+
+    // تعديل الإعلان كله — الصور: "keep:<رقم>" للصورة القديمة أو data:image جديدة بالترتيب
+    // pano / video: "keep" = زي ما هو، null = امسح، قيمة جديدة = بدّل
+    async "PUT /api/listings/:id"({ req, body, store, params }) {
+      const me = await requireUser(req, store);
+      const l = await ownListing(store, me, params.id);
+      limit(`listing-edit:${me.id}`, 60, 60 * 60 * 1000);
+      const fields = cleanListing(body);
+      const patch = { ...fields, updated_at: now(), media_v: Date.now().toString(36) };
+      delete patch.price; // السعر بيتغيّر تحت عشان يتسجل في سجل السعر
+
+      if (Array.isArray(body.images)) {
+        const old = {};
+        (await store.find("listing_media", { listing_id: l.id })).forEach((m) => { old[m.slot] = m; });
+        const next = body.images.slice(0, MAX_IMAGES).map((x) => {
+          const keep = typeof x === "string" && /^keep:[0-5]$/.test(x) ? old[x.slice(5)] : undefined;
+          if (keep !== undefined) return keep ? { mime: keep.mime, data: keep.data } : null;
+          return cleanImage(x, MAX_IMAGE_CHARS);
+        }).filter(Boolean);
+        for (let i = 0; i < MAX_IMAGES; i++) await store.remove("listing_media", { listing_id: l.id, slot: String(i) });
+        for (let i = 0; i < next.length; i++) await store.insert("listing_media", { listing_id: l.id, slot: String(i), ...next[i] });
+        patch.images = next.length;
+      }
+      if (body.pano === null) {
+        await store.remove("listing_media", { listing_id: l.id, slot: "pano" });
+        patch.has_pano = false;
+      } else if (body.pano && body.pano !== "keep") {
+        await store.upsert("listing_media", { listing_id: l.id, slot: "pano", ...cleanImage(body.pano, MAX_PANO_CHARS) });
+        patch.has_pano = true;
+      }
+      if (body.video !== undefined && body.video !== "keep") {
+        const nextVideo = video.clean(body.video, fail);
+        if (nextVideo !== l.video_url) {
+          if (l.video_url) await video.remove(l.video_url);
+          patch.video_url = nextVideo;
         }
       }
-      const fresh = await store.get("listings", { id: l.id });
-      const hist = await store.find("price_history", { listing_id: l.id }, { order: "created_at ASC" });
-      return { listing: publicListing(fresh, hist) };
+      await store.update("listings", { id: l.id }, patch);
+      await changePrice(store, { ...l, ...patch }, fields.price);
+      return { listing: await freshListing(store, l.id) };
     },
 
     async "DELETE /api/listings/:id"({ req, store, params }) {
@@ -421,6 +480,52 @@ module.exports = function features(h) {
       const readKey = c.buyer_id === me.id ? "buyer_read_at" : "seller_read_at";
       await store.update("conversations", { id: c.id }, { last_body: text.slice(0, 200), last_sender: me.id, last_at: t, [readKey]: t });
       return { status: 201, data: { message: publicMsg(m, me) } };
+    },
+
+    /* ----- لوحة المستخدم: أرقام عقاراته ----- */
+    async "GET /api/dashboard"({ req, store }) {
+      const me = await requireUser(req, store);
+      const [mine, sellerChats] = await Promise.all([
+        store.find("listings", { owner_id: me.id }),
+        store.find("conversations", { seller_id: me.id }),
+      ]);
+      const stats = {};
+      for (const l of mine) {
+        const favs = await store.find("favorites", { listing_id: l.id });
+        stats[l.id] = { favorites: favs.length, chats: 0, unread: 0 };
+      }
+      sellerChats.forEach((c) => {
+        const s = stats[c.listing_id];
+        if (!s) return;
+        s.chats += 1;
+        if (publicChat(c, me).unread) s.unread += 1;
+      });
+      return { listings: stats };
+    },
+
+    /* ----- الفيديو ----- */
+    async "GET /api/uploads/config"({ req, store }) {
+      await requireUser(req, store);
+      return { video: video.mode(), maxMB: video.MAX_MB, types: Object.keys(video.TYPES) };
+    },
+    async "POST /api/uploads/blob"({ req, body, store }) {
+      const me = await requireUser(req, store);
+      if (!POSTER_ROLES.includes(me.role)) fail(403, "err_forbidden");
+      if (video.mode() !== "blob") fail(503, "err_video_unavailable");
+      limit(`blob:${me.id}`, 30, 60 * 60 * 1000);
+      try { return await video.blobToken(req, body, me.id); } catch (e) { return fail(400, "err_video"); }
+    },
+    // على الجهاز بس: الطلب نفسه هو ملف الفيديو (مش JSON)
+    async "POST /api/uploads/video"({ req, store }) {
+      const me = await requireUser(req, store);
+      if (!POSTER_ROLES.includes(me.role)) fail(403, "err_forbidden");
+      if (video.mode() !== "local") fail(503, "err_video_unavailable");
+      limit(`video:${me.id}`, 30, 60 * 60 * 1000);
+      return { status: 201, data: await video.saveLocal(req, fail) };
+    },
+    async "GET /api/video/:file"({ req, res, params }) {
+      if (!video.serveLocal(req, res, params.file)) fail(404, "err_not_found");
+      return { handled: true };
     },
 
     /* ----- البحث المحفوظ ----- */
