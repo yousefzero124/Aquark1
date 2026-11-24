@@ -10,6 +10,7 @@
   const $ = (id) => document.getElementById(id);
   const me = Auth.current();
   if (!me) return;
+  if (!canCompare(me)) { location.replace("index.html"); return; } // المقارنة للمشتري بس
 
   // لينك مقارنة متبعت من حد → نحطه في قايمة المقارنة
   const urlIds = (new URLSearchParams(location.search).get("ids") || "").split(",").map((s) => s.trim()).filter(Boolean);

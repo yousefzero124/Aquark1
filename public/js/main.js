@@ -422,7 +422,9 @@ const Favs = {
     return on;
   },
 };
-/* ---------- المقارنة (لحد 4 عقارات من نفس النوع: بيع مع بيع أو إيجار مع إيجار) ---------- */
+/* ---------- المقارنة (لحد 4 عقارات من نفس النوع: بيع مع بيع أو إيجار مع إيجار) ----------
+   للمشتري بس — باقي الحسابات مش بيظهرلهم زرار "قارن" ولا الشريط ولا الصفحة */
+function canCompare(user = Auth.current()) { return !!(user && user.role === "buyer"); }
 const Compare = {
   KEY: "aqarak_compare",
   MAX: 4,
@@ -458,6 +460,7 @@ function refreshCompareButtons() {
   });
 }
 function handleCompare(id) {
+  if (!canCompare()) return;
   try {
     const on = Compare.toggle(id);
     toast(t(on ? "compare_added" : "compare_removed"), on ? "success" : "");
@@ -470,7 +473,7 @@ function handleCompare(id) {
 function renderCompareTray() {
   let tray = document.getElementById("cmpTray");
   const page = document.body.dataset.page;
-  const ids = Auth.current() && page !== "compare" && page !== "auth" ? Compare.ids() : [];
+  const ids = canCompare() && page !== "compare" && page !== "auth" ? Compare.ids() : [];
   if (!ids.length) { if (tray) tray.remove(); document.body.classList.remove("has-cmp-tray"); return; }
   if (!tray) {
     tray = document.createElement("div");
@@ -968,7 +971,7 @@ function propCard(l) {
       <div class="prop-body">
         <div class="prop-price-row">
           <div class="prop-price">${priceHTML(l)}</div>
-          ${user ? `<button type="button" class="cmp-btn${Compare.has(l.id) ? " on" : ""}" data-compare="${esc(l.id)}" aria-pressed="${Compare.has(l.id)}"
+          ${canCompare(user) ? `<button type="button" class="cmp-btn${Compare.has(l.id) ? " on" : ""}" data-compare="${esc(l.id)}" aria-pressed="${Compare.has(l.id)}"
             title="${esc(t(Compare.has(l.id) ? "compare_remove" : "compare_add"))}">${ICONS.compare}<span>${esc(t("compare"))}</span></button>` : ""}
         </div>
         <h3 class="prop-title">${esc(loc(l.title))}</h3>
@@ -1121,7 +1124,7 @@ function openDetails(id) {
             ${ICONS.heart}
             <span>${esc(t(fav ? "fav_remove" : "fav_add"))}</span>
           </button>
-          ${user ? `<button class="btn btn-ghost btn-block cmp-text-btn ${Compare.has(l.id) ? "on" : ""}" type="button" data-compare-modal="${esc(l.id)}">
+          ${canCompare(user) ? `<button class="btn btn-ghost btn-block cmp-text-btn ${Compare.has(l.id) ? "on" : ""}" type="button" data-compare-modal="${esc(l.id)}">
             ${ICONS.compare}<span>${esc(t(Compare.has(l.id) ? "compare_remove" : "compare_add"))}</span>
           </button>` : ""}
         </aside>
