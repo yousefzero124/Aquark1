@@ -63,11 +63,12 @@ function isLocalRequest(req) {
   const ip = String((req.socket && req.socket.remoteAddress) || "");
   return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
 }
-// كود الأدمن: على Vercel من ADMIN_CODE (لازم 12 حرف على الأقل عشان ميتخمّنش)، وعلى جهازك 2005 لو مش متحدد
-const ADMIN_CODE_MIN = 12;
+// كود الأدمن: على Vercel من ADMIN_CODE (مش مكتوب في الكود عشان الريبو عام)، وعلى جهازك 2005 لو مش متحدد
+// الكود ممكن يبقى قصير (زي 2005) — عشان كده فيه قفل عام: ADMIN_TRIES_PER_DAY محاولة في اليوم من كل الناس
+const ADMIN_TRIES_PER_DAY = 20;
 function adminCode(req) {
   const env = String(process.env.ADMIN_CODE || "").trim();
-  if (env) return IS_VERCEL && env.length < ADMIN_CODE_MIN ? "" : env;
+  if (env) return env;
   return req && isLocalRequest(req) ? "2005" : "";
 }
 
@@ -336,6 +337,8 @@ const routes = {
     if (!ROLES.includes(role)) fail(400, "err_role");
     if (role === "admin") {
       await limit(`admin:${clientIp(req)}`, 10, 60 * 60 * 1000);
+      // قفل عام لكل الناس مع بعض: محدش يقدر يجرّب الـ 10,000 رقم حتى لو غيّر الـ IP
+      await limit("admin:all", ADMIN_TRIES_PER_DAY, 24 * 60 * 60 * 1000);
       const expected = adminCode(req);
       if (!expected || !codesMatch(str(body.adminCode, 50), expected)) fail(403, "err_admin_code");
     }
@@ -601,7 +604,7 @@ async function health(res) {
   send(res, 200, {
     database,
     sessionSecret: IS_VERCEL ? (secret.length >= 32 ? "ok" : secret ? "too_short" : "missing") : "ok (local)",
-    adminCode: process.env.ADMIN_CODE ? (adminCode() ? "ok" : `too_short (min ${ADMIN_CODE_MIN})`) : (IS_VERCEL ? "missing" : "ok (local 2005)"),
+    adminCode: process.env.ADMIN_CODE ? "ok" : (IS_VERCEL ? "missing" : "ok (local 2005)"),
     resetEmail: process.env.RESEND_API_KEY && process.env.EMAIL_FROM ? "ok" : "off",
     videoUpload: { blob: "ok", local: "ok (local)", off: "off (needs Vercel Blob)" }[require("./video").mode()],
     google: process.env.GOOGLE_CLIENT_ID ? "ok" : "off",
